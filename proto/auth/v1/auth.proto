@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "github.com/dgmmarin/etiketai/gen/auth/v1;authv1";
+
+service AuthService {
+  rpc Register(RegisterRequest)             returns (RegisterResponse);
+  rpc Login(LoginRequest)                   returns (LoginResponse);
+  rpc RefreshToken(RefreshTokenRequest)     returns (RefreshTokenResponse);
+  rpc Logout(LogoutRequest)                 returns (LogoutResponse);
+  rpc VerifyEmail(VerifyEmailRequest)       returns (VerifyEmailResponse);
+  rpc VerifyToken(VerifyTokenRequest)       returns (VerifyTokenResponse);
+  rpc OAuthGoogle(OAuthGoogleRequest)       returns (LoginResponse);
+}
+
+// ─── Register ────────────────────────────────────────────────────────────────
+
+message RegisterRequest {
+  string email          = 1;
+  string password       = 2;
+  string workspace_name = 3;
+  string cui            = 4; // optional
+}
+
+message RegisterResponse {
+  string user_id      = 1;
+  string workspace_id = 2;
+  string message      = 3;
+}
+
+// ─── Login ───────────────────────────────────────────────────────────────────
+
+message LoginRequest {
+  string email    = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string access_token  = 1;
+  string refresh_token = 2;
+  int32  expires_in    = 3; // seconds
+  UserInfo user        = 4;
+}
+
+message UserInfo {
+  string id           = 1;
+  string email        = 2;
+  string workspace_id = 3;
+  string role         = 4; // admin | operator | viewer
+}
+
+// ─── Refresh token ────────────────────────────────────────────────────────────
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  string access_token = 1;
+  int32  expires_in   = 2;
+}
+
+// ─── Logout ──────────────────────────────────────────────────────────────────
+
+message LogoutRequest {
+  string refresh_token = 1;
+}
+
+message LogoutResponse {
+  bool success = 1;
+}
+
+// ─── Verify email ─────────────────────────────────────────────────────────────
+
+message VerifyEmailRequest {
+  string token = 1;
+}
+
+message VerifyEmailResponse {
+  bool   success = 1;
+  string user_id = 2;
+}
+
+// ─── Verify token (used by api-gateway middleware) ────────────────────────────
+
+message VerifyTokenRequest {
+  string access_token = 1;
+}
+
+message VerifyTokenResponse {
+  bool     valid        = 1;
+  UserInfo user         = 2;
+  string   error        = 3;
+}
+
+// ─── OAuth Google ────────────────────────────────────────────────────────────
+
+message OAuthGoogleRequest {
+  string id_token = 1; // ID token from Google Sign-In
+}

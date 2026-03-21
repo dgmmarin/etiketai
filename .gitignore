@@ -1,0 +1,42 @@
+# Binaries
+services/*/bin/
+services/*/server
+gen/server
+*.exe
+*.dll
+*.so
+
+# Go build cache
+/tmp/
+
+# Environment files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Go workspace artifacts
+go.work.sum
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Air (hot reload) tmp dirs
+services/*/.air/
+services/*/tmp/
+
+# Node.js
+node_modules/
+web/node_modules/
+web/.next/
+web/out/
+
+# Docker volumes
+infra/data/
+.claude/

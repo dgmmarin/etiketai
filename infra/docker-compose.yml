@@ -1,0 +1,354 @@
+version: "3.9"
+
+x-postgres-common: &postgres-common
+  image: postgres:16-alpine
+  restart: unless-stopped
+  environment:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+
+services:
+
+  # ─── API Layer ─────────────────────────────────────────────────────────────
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      ENV: ${ENV:-development}
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SVC_ADDR: auth-svc:8081
+      WORKSPACE_SVC_ADDR: workspace-svc:8082
+      LABEL_SVC_ADDR: label-svc:8083
+      AGENT_SVC_ADDR: agent-svc:8084
+      PRINT_SVC_URL: http://print-svc:8085
+      AGENT_ADMIN_URL: http://agent-svc:9084
+      PRODUCT_SVC_URL: http://label-svc:8088
+      BILLING_SVC_URL: http://workspace-svc:8092
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      S3_BUCKET: ${S3_BUCKET:-etiketai}
+    depends_on:
+      auth-svc:
+        condition: service_started
+      label-svc:
+        condition: service_started
+      agent-svc:
+        condition: service_started
+    restart: unless-stopped
+
+  # ─── Microservices ─────────────────────────────────────────────────────────
+
+  auth-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: auth-svc
+    ports:
+      - "8081:8081"
+    environment:
+      PORT: 8081
+      AUTH_DB_DSN: postgres://postgres:postgres@auth-db:5432/auth_db?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-30}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@etiketai.ro}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  workspace-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: workspace-svc
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: 8082
+      BILLING_PORT: 8092
+      WORKSPACE_DB_DSN: postgres://postgres:postgres@workspace-db:5432/workspace_db?sslmode=disable
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
+      STRIPE_PRICE_BUSINESS: ${STRIPE_PRICE_BUSINESS:-}
+      STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+    depends_on:
+      workspace-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  label-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: label-svc
+    ports:
+      - "8083:8083"
+    environment:
+      PORT: 8083
+      LABEL_DB_DSN: postgres://postgres:postgres@label-db:5432/label_db?sslmode=disable
+      AGENT_SVC_ADDR: agent-svc:8084
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      S3_BUCKET: ${S3_BUCKET:-etiketai}
+    depends_on:
+      label-db:
+        condition: service_healthy
+      agent-svc:
+        condition: service_started
+    restart: unless-stopped
+
+  agent-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: agent-svc
+    ports:
+      - "8084:8084"
+    environment:
+      PORT: 8084
+      AGENT_DB_DSN: postgres://postgres:postgres@agent-db:5432/agent_db?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_DEFAULT_MODEL: ${OLLAMA_DEFAULT_MODEL:-llava:7b}
+      ENCRYPTION_KEY: ${AES_KEY_HEX}
+      AGENT_CACHE_TTL_SECONDS: ${AGENT_CACHE_TTL_SECONDS:-300}
+      VISION_TIMEOUT_SECONDS: ${VISION_TIMEOUT_SECONDS:-60}
+      TRANSL_TIMEOUT_SECONDS: ${TRANSL_TIMEOUT_SECONDS:-30}
+      MAX_RETRIES: ${MAX_RETRIES:-3}
+      COST_TRACKING_ENABLED: ${COST_TRACKING_ENABLED:-true}
+      ADMIN_PORT: 9084
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      S3_BUCKET: ${S3_BUCKET:-etiketai}
+    depends_on:
+      agent-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  print-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: print-svc
+    ports:
+      - "8085:8085"
+    environment:
+      PORT: 8085
+      PRINT_DB_DSN: postgres://postgres:postgres@print-db:5432/print_db?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      PRODUCT_SVC_URL: http://label-svc:8088
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      S3_BUCKET: ${S3_BUCKET:-etiketai}
+    depends_on:
+      print-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  notification-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: notification-svc
+    ports:
+      - "8086:8086"
+    environment:
+      PORT: 8086
+      REDIS_URL: redis://redis:6379
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@etiketai.ro}
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  admin-svc:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        SERVICE: admin-svc
+    ports:
+      - "8087:8087"
+    environment:
+      PORT: 8087
+      AGENT_SVC_ADDR: agent-svc:8084
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # ─── Databases ─────────────────────────────────────────────────────────────
+
+  auth-db:
+    <<: *postgres-common
+    ports:
+      - "5437:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_db
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+
+  workspace-db:
+    <<: *postgres-common
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: workspace_db
+    volumes:
+      - workspace-db-data:/var/lib/postgresql/data
+
+  label-db:
+    <<: *postgres-common
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: label_db
+    volumes:
+      - label-db-data:/var/lib/postgresql/data
+
+  agent-db:
+    <<: *postgres-common
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agent_db
+    volumes:
+      - agent-db-data:/var/lib/postgresql/data
+
+  print-db:
+    <<: *postgres-common
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: print_db
+    volumes:
+      - print-db-data:/var/lib/postgresql/data
+
+  # ─── Infrastructure ────────────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set local http://minio:9000 minioadmin minioadmin123;
+      mc mb --ignore-existing local/etiketai;
+      mc anonymous set download local/etiketai/thumbnails;
+      echo 'MinIO bucket setup complete';
+      "
+
+  # ─── Observability ─────────────────────────────────────────────────────────
+
+  asynqmon:
+    image: hibiken/asynqmon:latest
+    ports:
+      - "8090:8080"
+    environment:
+      REDIS_ADDR: redis:6379
+    depends_on:
+      - redis
+    profiles:
+      - monitoring
+
+  # ─── AI (on-premise) ───────────────────────────────────────────────────────
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+    profiles:
+      - ollama
+    # GPU support (uncomment for NVIDIA):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  auth-db-data:
+  workspace-db-data:
+  label-db-data:
+  agent-db-data:
+  print-db-data:
+  redis-data:
+  minio-data:
+  ollama-models:

@@ -1,0 +1,188 @@
+version: "3"
+
+vars:
+  SERVICES:
+    - api-gateway
+    - auth-svc
+    - workspace-svc
+    - label-svc
+    - agent-svc
+    - print-svc
+    - notification-svc
+    - admin-svc
+
+tasks:
+  # ─── Dev ──────────────────────────────────────────────────────────────────
+
+  dev-all:
+    desc: Start all Go services with hot-reload (air)
+    deps: [infra-up]
+    cmds:
+      - |
+        for svc in {{range .SERVICES}}{{.}} {{end}}; do
+          (cd services/$svc && air -c .air.toml) &
+        done
+        wait
+
+  dev:
+    desc: Start a single service with hot-reload
+    cmds:
+      - cd services/{{.SERVICE}} && air -c .air.toml
+    requires:
+      vars: [SERVICE]
+
+  # ─── Build ────────────────────────────────────────────────────────────────
+
+  build:
+    desc: Build a single service binary
+    cmds:
+      - cd services/{{.SERVICE}} && go build -o bin/{{.SERVICE}} ./cmd/server
+    requires:
+      vars: [SERVICE]
+
+  build-all:
+    desc: Build all service binaries
+    cmds:
+      - |
+        for svc in {{range .SERVICES}}{{.}} {{end}}; do
+          echo "Building $svc..."
+          (cd services/$svc && go build -o bin/$svc ./cmd/server)
+        done
+
+  docker-build:
+    desc: Build all Docker images
+    cmds:
+      - |
+        for svc in {{range .SERVICES}}{{.}} {{end}}; do
+          docker build -t etiketai/$svc:latest services/$svc/
+        done
+
+  # ─── Test ─────────────────────────────────────────────────────────────────
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
+
+  test-svc:
+    desc: Run tests for a single service
+    cmds:
+      - cd services/{{.SERVICE}} && go test ./...
+    requires:
+      vars: [SERVICE]
+
+  # ─── Lint ─────────────────────────────────────────────────────────────────
+
+  lint:
+    desc: Run golangci-lint on all services
+    cmds:
+      - |
+        for svc in {{range .SERVICES}}{{.}} {{end}}; do
+          echo "Linting $svc..."
+          (cd services/$svc && golangci-lint run ./...)
+        done
+
+  # ─── Proto ────────────────────────────────────────────────────────────────
+
+  gen-proto:
+    desc: Generate Go code from all .proto files
+    cmds:
+      - bash scripts/gen-proto.sh
+
+  # ─── Infrastructure ───────────────────────────────────────────────────────
+
+  infra-up:
+    desc: Start all infrastructure containers
+    cmds:
+      - docker compose -f infra/docker-compose.yml up -d
+
+  infra-down:
+    desc: Stop all infrastructure containers
+    cmds:
+      - docker compose -f infra/docker-compose.yml down
+
+  # ─── Migrations ───────────────────────────────────────────────────────────
+
+  migrate-all:
+    desc: Run migrations for all services
+    cmds:
+      - |
+        for svc in auth-svc workspace-svc label-svc agent-svc print-svc; do
+          echo "Migrating $svc..."
+          bash scripts/migrate.sh $svc up
+        done
+
+  migrate:
+    desc: Run migrations for a single service (up)
+    cmds:
+      - bash scripts/migrate.sh {{.SERVICE}} up
+    requires:
+      vars: [SERVICE]
+
+  migrate-down:
+    desc: Rollback last migration for a service
+    cmds:
+      - bash scripts/migrate.sh {{.SERVICE}} down
+    requires:
+      vars: [SERVICE]
+
+  migrate-force:
+    desc: Force migration version for a service
+    cmds:
+      - bash scripts/migrate.sh {{.SERVICE}} force {{.VERSION}}
+    requires:
+      vars: [SERVICE, VERSION]
+
+  seed-dev:
+    desc: Seed development data into all DBs
+    cmds:
+      - bash scripts/seed-dev.sh
+
+  # ─── Debug tools ──────────────────────────────────────────────────────────
+
+  logs:
+    desc: Tail logs for a service container
+    cmds:
+      - docker compose -f infra/docker-compose.yml logs -f {{.SERVICE}}
+    requires:
+      vars: [SERVICE]
+
+  db-shell:
+    desc: Open psql shell for a service DB
+    cmds:
+      - docker compose -f infra/docker-compose.yml exec {{.DB}}-db psql -U postgres {{.DB}}_db
+    requires:
+      vars: [DB]
+
+  redis-cli:
+    desc: Open redis-cli connected to local Redis
+    cmds:
+      - docker compose -f infra/docker-compose.yml exec redis redis-cli
+
+  redis-flush:
+    desc: Flush all Redis data (dev only!)
+    cmds:
+      - docker compose -f infra/docker-compose.yml exec redis redis-cli FLUSHALL
+
+  grpc-test:
+    desc: Test a gRPC method with grpcurl
+    cmds:
+      - grpcurl -plaintext localhost:{{.PORT}} {{.SVC}}.v1.{{.SVC | title}}Service/{{.METHOD}}
+    requires:
+      vars: [SVC, METHOD]
+
+  asynqmon:
+    desc: Open Asynq monitoring UI
+    cmds:
+      - docker compose -f infra/docker-compose.yml up -d asynqmon
+      - echo "Asynqmon available at http://localhost:8090"
+
+  minio-ui:
+    desc: Open MinIO console
+    cmds:
+      - echo "MinIO console at http://localhost:9001 (minioadmin / minioadmin123)"
+
+  ollama-pull:
+    desc: Pull Ollama vision model
+    cmds:
+      - docker compose -f infra/docker-compose.yml exec ollama ollama pull {{.MODEL | default "llava:7b"}}

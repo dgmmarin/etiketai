@@ -1,0 +1,14 @@
+version: "1.0.0"
+rules:
+  - field: product_name
+    severity: blocker
+    message: "Denumirea produsului este obligatorie (OG 21/1992 art. 3)"
+  - field: manufacturer
+    severity: blocker
+    message: "Producătorul trebuie menționat (OG 21/1992 art. 4)"
+  - field: quantity
+    severity: blocker
+    message: "Cantitatea netă trebuie indicată (OG 21/1992 art. 5)"
+  - field: country_of_origin
+    severity: warning
+    message: "Țara de origine este recomandată (Reg. UE 1169/2011 art. 26)"

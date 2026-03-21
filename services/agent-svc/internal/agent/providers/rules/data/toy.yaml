@@ -1,0 +1,18 @@
+version: "1.0.0"
+category: toy
+rules:
+  - field: warnings
+    severity: blocker
+    message: "Avertismentele de siguranță sunt obligatorii (Directiva 2009/48/CE)"
+  - field: age_range
+    severity: blocker
+    message: "Grupa de vârstă recomandată trebuie indicată (Directiva 2009/48/CE art. 11)"
+  - field: ce_marking
+    severity: blocker
+    message: "Marcajul CE este obligatoriu (Directiva 2009/48/CE)"
+  - field: manufacturer
+    severity: blocker
+    message: "Producătorul / importatorul UE trebuie menționat (Directiva 2009/48/CE art. 11)"
+  - field: material_composition
+    severity: warning
+    message: "Compoziția materialelor este recomandată (Directiva 2009/48/CE)"

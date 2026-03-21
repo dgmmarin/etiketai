@@ -1,0 +1,127 @@
+syntax = "proto3";
+
+package agent.v1;
+
+option go_package = "github.com/dgmmarin/etiketai/gen/agent/v1;agentv1";
+
+service AgentService {
+  rpc ProcessVision(VisionRequest)           returns (VisionResponse);
+  rpc ProcessTranslation(TranslRequest)      returns (TranslResponse);
+  rpc ProcessValidation(ValidRequest)        returns (ValidResponse);
+  rpc GetAgentConfig(ConfigRequest)          returns (AgentConfig);
+  rpc UpdateAgentConfig(UpdateConfigRequest) returns (UpdateConfigResponse);
+  rpc TestAgentConfig(TestConfigRequest)     returns (TestConfigResponse);
+}
+
+// ─── Vision ───────────────────────────────────────────────────────────────────
+
+message VisionRequest {
+  string label_id        = 1;
+  string image_s3_key    = 2;
+  string workspace_id    = 3;
+  string target_language = 4; // default: "ro"
+}
+
+message VisionResponse {
+  string label_id      = 1;
+  string raw_json      = 2; // extracted fields JSON
+  float  confidence    = 3; // overall confidence
+  string detected_lang = 4; // ISO 639-1
+  string provider_used = 5; // "claude" | "ollama"
+  int32  tokens_used   = 6;
+  int32  latency_ms    = 7;
+}
+
+// ─── Translation ──────────────────────────────────────────────────────────────
+
+message TranslRequest {
+  string label_id      = 1;
+  string workspace_id  = 2;
+  string fields_json   = 3; // JSON with extracted fields
+  string category      = 4; // food | cosmetic | electronics | toy | other
+  string source_lang   = 5; // ISO 639-1
+}
+
+message TranslResponse {
+  string label_id          = 1;
+  string translated_json   = 2; // JSON with translated fields
+  string provider_used     = 3;
+  int32  tokens_used       = 4;
+  int32  latency_ms        = 5;
+}
+
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+message ValidRequest {
+  string label_id          = 1;
+  string workspace_id      = 2;
+  string translated_json   = 3;
+  string category          = 4;
+}
+
+message ValidResponse {
+  string          label_id          = 1;
+  int32           compliance_score  = 2; // 0–100
+  repeated MissingField missing     = 3;
+  string          rules_version     = 4;
+}
+
+message MissingField {
+  string field    = 1;
+  string severity = 2; // "blocker" | "warning"
+  string message  = 3;
+}
+
+// ─── Agent Config ─────────────────────────────────────────────────────────────
+
+message ConfigRequest {
+  string workspace_id = 1;
+}
+
+message AgentConfig {
+  string workspace_id      = 1;
+  ProviderConfig vision     = 2;
+  ProviderConfig translation= 3;
+  ProviderConfig validation = 4;
+  ProviderConfig fallback   = 5;
+  string ollama_url         = 6;
+  string updated_at         = 7;
+}
+
+message ProviderConfig {
+  string provider = 1; // "claude" | "ollama"
+  string model    = 2;
+}
+
+message UpdateConfigRequest {
+  string workspace_id      = 1;
+  ProviderConfig vision     = 2;
+  ProviderConfig translation= 3;
+  ProviderConfig validation = 4;
+  ProviderConfig fallback   = 5;
+  string ollama_url         = 6;
+  string api_key            = 7; // optional; encrypted before storage
+  string updated_by         = 8;
+}
+
+message UpdateConfigResponse {
+  bool success          = 1;
+  bool cache_invalidated= 2;
+}
+
+// ─── Test Config ──────────────────────────────────────────────────────────────
+
+message TestConfigRequest {
+  string workspace_id = 1;
+  string agent_type   = 2; // "vision" | "translation" | "validation"
+}
+
+message TestConfigResponse {
+  bool   success                = 1;
+  string provider               = 2;
+  string model                  = 3;
+  int32  latency_ms             = 4;
+  string sample_output          = 5; // JSON snippet
+  double estimated_cost_per_1000= 6;
+  string error                  = 7;
+}

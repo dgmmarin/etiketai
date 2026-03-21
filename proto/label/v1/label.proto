@@ -1,0 +1,192 @@
+syntax = "proto3";
+
+package label.v1;
+
+option go_package = "github.com/dgmmarin/etiketai/gen/label/v1;labelv1";
+
+service LabelService {
+  rpc UploadLabel(UploadLabelRequest)       returns (UploadLabelResponse);
+  rpc GetLabelStatus(LabelStatusRequest)    returns (LabelStatusResponse);
+  rpc UpdateLabelFields(UpdateFieldsRequest)returns (UpdateFieldsResponse);
+  rpc ConfirmLabel(ConfirmLabelRequest)     returns (ConfirmLabelResponse);
+  rpc ListLabels(ListLabelsRequest)         returns (ListLabelsResponse);
+  rpc GetLabel(GetLabelRequest)             returns (LabelDetail);
+  rpc DeleteLabel(DeleteLabelRequest)       returns (DeleteLabelResponse);
+  rpc ExportLabels(ExportLabelsRequest)     returns (ExportLabelsResponse);
+
+  // Internal: called by agent-svc after processing
+  rpc SetAIResult(SetAIResultRequest)       returns (SetAIResultResponse);
+}
+
+// ─── Upload ───────────────────────────────────────────────────────────────────
+
+message UploadLabelRequest {
+  string workspace_id = 1;
+  string user_id      = 2;
+  string image_s3_key = 3; // already uploaded to S3 by api-gateway
+  string mime_type    = 4; // image/jpeg | image/png | application/pdf
+}
+
+message UploadLabelResponse {
+  string label_id   = 1;
+  string status     = 2; // "processing"
+  string job_id     = 3;
+  string image_url  = 4; // thumbnail URL
+}
+
+// ─── Status ───────────────────────────────────────────────────────────────────
+
+message LabelStatusRequest {
+  string label_id     = 1;
+  string workspace_id = 2;
+}
+
+message LabelStatusResponse {
+  string              label_id      = 1;
+  string              status        = 2; // pending|processing|review|confirmed|archived
+  int32               progress      = 3; // 0–100
+  map<string, FieldValue> fields    = 4;
+  ComplianceInfo      compliance    = 5;
+  string              provider_used = 6;
+  int32               processing_ms = 7;
+}
+
+message FieldValue {
+  string value      = 1;
+  float  confidence = 2;
+  string original   = 3; // original text before translation
+}
+
+message ComplianceInfo {
+  int32               score   = 1;
+  repeated MissingField missing= 2;
+}
+
+message MissingField {
+  string field    = 1;
+  string severity = 2; // blocker | warning
+}
+
+// ─── Update fields ────────────────────────────────────────────────────────────
+
+message UpdateFieldsRequest {
+  string              label_id     = 1;
+  string              workspace_id = 2;
+  string              user_id      = 3;
+  map<string, string> fields       = 4;
+  bool                is_draft     = 5;
+}
+
+message UpdateFieldsResponse {
+  string              label_id       = 1;
+  repeated string     updated_fields = 2;
+  ComplianceInfo      compliance     = 3;
+}
+
+// ─── Confirm ─────────────────────────────────────────────────────────────────
+
+message ConfirmLabelRequest {
+  string label_id     = 1;
+  string workspace_id = 2;
+  string user_id      = 3;
+}
+
+message ConfirmLabelResponse {
+  string label_id         = 1;
+  string status           = 2;
+  int32  quota_remaining  = 3;
+  string confirmed_at     = 4;
+}
+
+// ─── List ─────────────────────────────────────────────────────────────────────
+
+message ListLabelsRequest {
+  string workspace_id = 1;
+  string status       = 2; // optional filter
+  string category     = 3; // optional filter
+  string q            = 4; // full-text search
+  string from         = 5; // ISO 8601 date
+  string to           = 6;
+  int32  page         = 7;
+  int32  per_page     = 8;
+}
+
+message ListLabelsResponse {
+  repeated LabelSummary data       = 1;
+  PaginationInfo        pagination = 2;
+}
+
+message LabelSummary {
+  string id               = 1;
+  string status           = 2;
+  string product_name     = 3;
+  string category         = 4;
+  int32  compliance_score = 5;
+  string created_at       = 6;
+  string operator         = 7; // user display name
+  string image_thumb_url  = 8;
+}
+
+message PaginationInfo {
+  int32 total    = 1;
+  int32 page     = 2;
+  int32 per_page = 3;
+}
+
+// ─── Get / Delete / Export ────────────────────────────────────────────────────
+
+message GetLabelRequest {
+  string label_id     = 1;
+  string workspace_id = 2;
+}
+
+message LabelDetail {
+  string                  id                = 1;
+  string                  workspace_id      = 2;
+  string                  status            = 3;
+  string                  category          = 4;
+  string                  detected_language = 5;
+  string                  image_url         = 6;
+  map<string, FieldValue> fields            = 7;
+  ComplianceInfo          compliance        = 8;
+  string                  created_at        = 9;
+  string                  confirmed_at      = 10;
+}
+
+message DeleteLabelRequest {
+  string label_id     = 1;
+  string workspace_id = 2;
+}
+
+message DeleteLabelResponse {
+  bool success = 1;
+}
+
+message ExportLabelsRequest {
+  string workspace_id = 1;
+  string format       = 2; // "csv"
+  string from         = 3;
+  string to           = 4;
+}
+
+message ExportLabelsResponse {
+  string download_url = 1;
+  string expires_at   = 2;
+}
+
+// ─── Internal: set AI result ──────────────────────────────────────────────────
+
+message SetAIResultRequest {
+  string label_id          = 1;
+  string ai_raw_json       = 2;
+  string fields_translated = 3;
+  int32  compliance_score  = 4;
+  string missing_fields    = 5; // JSON array
+  string provider_used     = 6;
+  string detected_language = 7;
+  string category          = 8;
+}
+
+message SetAIResultResponse {
+  bool success = 1;
+}

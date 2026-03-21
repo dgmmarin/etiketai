@@ -1,0 +1,18 @@
+version: "1.0.0"
+category: cosmetic
+rules:
+  - field: ingredients
+    severity: blocker
+    message: "Lista ingredientelor INCI este obligatorie (Reg. CE 1223/2009 art. 19)"
+  - field: lot_number
+    severity: blocker
+    message: "Numărul lotului este obligatoriu (Reg. CE 1223/2009 art. 19)"
+  - field: warnings
+    severity: warning
+    message: "Avertismentele speciale sunt recomandate (Reg. CE 1223/2009 art. 19)"
+  - field: responsible_person
+    severity: blocker
+    message: "Persoana responsabilă în UE trebuie menționată (Reg. CE 1223/2009 art. 19)"
+  - field: nominal_content
+    severity: blocker
+    message: "Conținutul nominal trebuie indicat (Reg. CE 1223/2009 art. 19)"

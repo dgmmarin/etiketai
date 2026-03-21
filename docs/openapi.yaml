@@ -1,0 +1,1514 @@
+openapi: 3.0.3
+
+info:
+  title: EtiketAI API — Complete Reference
+  description: |
+    All HTTP endpoints across the EtiketAI microservices.
+
+    ## Services & Ports
+
+    | Service | Port | Visibility | Auth |
+    |---------|------|------------|------|
+    | **api-gateway** | 8080 | Public | Bearer JWT |
+    | **print-svc** | 8085 | Internal (cluster-only) | None — gateway enforces auth |
+    | **workspace-svc** billing | 8092 | Internal (cluster-only) | `X-Workspace-ID` header |
+    | **agent-svc** admin | 9084 | Internal (cluster-only) | None — firewalled |
+    | **label-svc** products | 8088 | Internal (cluster-only) | `X-Workspace-ID` header |
+
+    ## Auth (api-gateway only)
+    Protected routes require `Authorization: Bearer <access_token>`.
+    The JWT carries `wid` (workspace ID) and `role` claims.
+
+    **Role hierarchy:** `admin` > `operator` > `viewer`
+
+    ## Internal services
+    Internal HTTP servers (ports 8085, 8088, 8092, 9084) are not exposed
+    to the internet. They are called by the api-gateway from within the Docker
+    network. No JWT is required — workspace context is forwarded via headers.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: api-gateway (public)
+
+tags:
+  # api-gateway tags
+  - name: health
+    description: Health check
+  - name: auth
+    description: Authentication & OAuth — api-gateway :8080
+  - name: labels
+    description: Label upload, enrichment, compliance — api-gateway :8080
+  - name: print-public
+    description: PDF print jobs (public API) — api-gateway :8080
+  - name: products-public
+    description: Product library (public API) — api-gateway :8080
+  - name: workspace
+    description: Workspace profile & members — api-gateway :8080
+  - name: billing-public
+    description: Stripe checkout (public API) — api-gateway :8080
+  - name: admin-public
+    description: Agent config & observability (public API) — api-gateway :8080
+  # internal service tags
+  - name: print-svc
+    description: "Internal — print-svc :8085 (called by api-gateway)"
+  - name: products-svc
+    description: "Internal — label-svc product HTTP :8088 (called by api-gateway)"
+  - name: billing-svc
+    description: "Internal — workspace-svc billing HTTP :8092 (Stripe webhooks)"
+  - name: agent-admin-svc
+    description: "Internal — agent-svc admin HTTP :9084 (called by api-gateway)"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        code:  { type: string }
+      required: [error]
+
+    UserInfo:
+      type: object
+      properties:
+        id:           { type: string, format: uuid }
+        email:        { type: string, format: email }
+        workspace_id: { type: string, format: uuid }
+        role:         { type: string, enum: [admin, operator, viewer] }
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:  { type: string }
+        refresh_token: { type: string }
+        expires_in:    { type: integer, description: "TTL in seconds" }
+        user:          { $ref: '#/components/schemas/UserInfo' }
+
+    FieldValue:
+      type: object
+      properties:
+        value:      { type: string }
+        confidence: { type: number, format: float, minimum: 0, maximum: 1 }
+        source:     { type: string, enum: [vision, manual] }
+
+    LabelStatus:
+      type: object
+      properties:
+        label_id:     { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        status:       { type: string, enum: [pending, processing, needs_review, confirmed, failed] }
+        category:     { type: string, enum: [food, cosmetic, electronics, toy, other] }
+        fields:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/FieldValue' }
+        image_url:  { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    LabelListItem:
+      type: object
+      properties:
+        id:           { type: string, format: uuid }
+        status:       { type: string }
+        category:     { type: string }
+        image_url:    { type: string }
+        product_name: { type: string }
+        created_at:   { type: string, format: date-time }
+
+    ComplianceResponse:
+      type: object
+      properties:
+        label_id: { type: string, format: uuid }
+        score:    { type: integer, minimum: 0, maximum: 100 }
+        status:   { type: string, enum: [compliant, non_compliant, needs_review] }
+        missing:
+          type: array
+          items:
+            type: object
+            properties:
+              field:    { type: string }
+              severity: { type: string, enum: [required, recommended] }
+              message:  { type: string }
+
+    PrintJob:
+      type: object
+      properties:
+        job_id:      { type: string, format: uuid }
+        label_id:    { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        status:       { type: string, enum: [queued, processing, ready, failed, printed] }
+        format:      { type: string, enum: [pdf, zpl] }
+        size:        { type: string, example: A4 }
+        copies:      { type: integer }
+        pdf_url:     { type: string, description: "Presigned S3 URL — only present when status=ready" }
+        zpl_payload: { type: string, description: "Only present for ZPL format" }
+        error:       { type: string }
+        created_at:  { type: string, format: date-time }
+
+    Product:
+      type: object
+      properties:
+        id:             { type: string, format: uuid }
+        workspace_id:   { type: string, format: uuid }
+        sku:            { type: string }
+        name:           { type: string }
+        category:       { type: string }
+        default_fields:
+          type: object
+          additionalProperties: { type: string, nullable: true }
+        print_count:    { type: integer }
+        created_at:     { type: string, format: date-time }
+        updated_at:     { type: string, format: date-time }
+
+    Workspace:
+      type: object
+      properties:
+        id:                   { type: string, format: uuid }
+        name:                 { type: string }
+        cui:                  { type: string, description: "Romanian company tax ID" }
+        address:              { type: string }
+        phone:                { type: string }
+        logo_url:             { type: string }
+        plan:                 { type: string, enum: [starter, business, enterprise] }
+        label_quota_monthly:  { type: integer }
+        label_quota_used:     { type: integer }
+        created_at:           { type: string, format: date-time }
+
+    Subscription:
+      type: object
+      properties:
+        plan:                   { type: string }
+        stripe_subscription_id: { type: string }
+        period_end:             { type: string, format: date-time }
+        label_quota_monthly:    { type: integer }
+        label_quota_used:       { type: integer }
+
+    Member:
+      type: object
+      properties:
+        id:      { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        email:   { type: string, format: email }
+        role:    { type: string, enum: [admin, operator, viewer] }
+
+    ProviderConfig:
+      type: object
+      properties:
+        provider: { type: string, enum: [anthropic, openai, ollama] }
+        model:    { type: string, example: claude-opus-4-6 }
+
+    AgentConfig:
+      type: object
+      properties:
+        workspace_id: { type: string, format: uuid }
+        vision:       { $ref: '#/components/schemas/ProviderConfig' }
+        translation:  { $ref: '#/components/schemas/ProviderConfig' }
+        validation:   { $ref: '#/components/schemas/ProviderConfig' }
+        fallback:     { $ref: '#/components/schemas/ProviderConfig' }
+        ollama_url:   { type: string }
+
+    CallLogEntry:
+      type: object
+      properties:
+        id:            { type: string, format: uuid }
+        workspace_id:  { type: string, format: uuid }
+        label_id:      { type: string, format: uuid }
+        agent_type:    { type: string, enum: [vision, translation, validation] }
+        provider:      { type: string }
+        model:         { type: string }
+        tokens_input:  { type: integer }
+        tokens_output: { type: integer }
+        latency_ms:    { type: integer }
+        cost_usd:      { type: number, format: double }
+        success:       { type: boolean }
+        error_message: { type: string }
+        called_at:     { type: string, format: date-time }
+
+    RateLimit:
+      type: object
+      properties:
+        max_labels_per_hour: { type: integer }
+        max_tokens_per_hour: { type: integer }
+
+    LabelData:
+      description: Extracted label field values forwarded to print-svc
+      type: object
+      properties:
+        product_name:  { type: string }
+        manufacturer:  { type: string }
+        quantity:      { type: string }
+        expiry_date:   { type: string }
+        ingredients:   { type: string }
+        lot_number:    { type: string }
+        country:       { type: string }
+        warnings:      { type: string }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# API GATEWAY — port 8080 (public)
+# ═══════════════════════════════════════════════════════════════════════════════
+paths:
+
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      servers:
+        - url: http://localhost:8080
+          description: api-gateway
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  time:   { type: string, format: date-time }
+
+  # ── Auth ───────────────────────────────────────────────────────────────────
+  /v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Register a new user and create their workspace
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, workspace_name]
+              properties:
+                email:          { type: string, format: email }
+                password:       { type: string, minLength: 8 }
+                workspace_name: { type: string }
+                cui:            { type: string, description: "Optional Romanian company tax ID" }
+      responses:
+        '201':
+          description: Registered — verification email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:      { type: string, format: uuid }
+                  workspace_id: { type: string, format: uuid }
+                  message:      { type: string }
+        '400': { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Log in with email + password
+      description: Rate-limited to 5 attempts per 15 minutes per IP.
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:    { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401': { description: Invalid credentials or unverified email, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '429': { description: Too many attempts, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate refresh token and issue a new access token
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  expires_in:   { type: integer }
+        '401': { description: Invalid token, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the refresh token
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  /v1/auth/verify-email:
+    get:
+      tags: [auth]
+      summary: Verify email address via one-time token
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '400': { description: Invalid or expired token, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/auth/oauth/google:
+    post:
+      tags: [auth]
+      summary: Sign in with a Google ID token
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token: { type: string, description: "Google ID token from client-side Sign-In" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401': { description: Invalid Google token, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  # ── Products (public) ──────────────────────────────────────────────────────
+  /v1/products:
+    get:
+      tags: [products-public]
+      summary: List products in the workspace library
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: q,        in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: page,     in: query, schema: { type: integer, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:    { type: integer }
+                  products:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+        '401': { description: Unauthorized, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+    post:
+      tags: [products-public]
+      summary: Create a product
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                sku:            { type: string }
+                name:           { type: string }
+                category:       { type: string, enum: [food, cosmetic, electronics, toy, other] }
+                default_fields: { type: object, additionalProperties: { type: string, nullable: true } }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+
+  /v1/products/{id}:
+    get:
+      tags: [products-public]
+      summary: Get a product by ID
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+    patch:
+      tags: [products-public]
+      summary: Update a product
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:           { type: string }
+                category:       { type: string }
+                default_fields: { type: object, additionalProperties: { type: string, nullable: true } }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+
+  # ── Labels (public) ────────────────────────────────────────────────────────
+  /v1/labels:
+    get:
+      tags: [labels]
+      summary: List labels for the workspace
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: status,   in: query, schema: { type: string, enum: [pending, processing, needs_review, confirmed, failed] } }
+        - { name: category, in: query, schema: { type: string, enum: [food, cosmetic, electronics, toy, other] } }
+        - { name: q,        in: query, schema: { type: string } }
+        - { name: page,     in: query, schema: { type: integer, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Label list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:      { type: array, items: { $ref: '#/components/schemas/LabelListItem' } }
+                  total:     { type: integer }
+                  page:      { type: integer }
+                  per_page:  { type: integer }
+
+  /v1/labels/export:
+    get:
+      tags: [labels]
+      summary: Export labels as CSV
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: status,   in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: CSV download
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        '403': { description: Forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/labels/upload:
+    post:
+      tags: [labels]
+      summary: Upload a label image and start the AI pipeline
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:    { type: string, format: binary, description: "JPEG/PNG, max 10 MB" }
+                category: { type: string, enum: [food, cosmetic, electronics, toy, other] }
+      responses:
+        '202':
+          description: Accepted — queued for processing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  label_id: { type: string, format: uuid }
+                  status:   { type: string, example: pending }
+        '400': { description: Missing image or file too large, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '402': { description: Monthly quota exceeded, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/labels/{id}/status:
+    get:
+      tags: [labels]
+      summary: Get label status with all extracted fields
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Label status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LabelStatus' }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/labels/{id}/compliance:
+    get:
+      tags: [labels]
+      summary: Get compliance score and missing required fields
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Compliance result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComplianceResponse' }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/labels/{id}/fields:
+    patch:
+      tags: [labels]
+      summary: Update label fields manually
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id,    in: path,  required: true, schema: { type: string, format: uuid } }
+        - { name: draft, in: query, schema: { type: boolean, default: false }, description: "Save without re-triggering validation" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: { type: string }
+              example:
+                product_name: "Lapte UHT 3.5%"
+                manufacturer: "Fabrica de Lactate SRL"
+      responses:
+        '200':
+          description: Updated label
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LabelStatus' }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/labels/{id}/confirm:
+    post:
+      tags: [labels]
+      summary: Confirm a label (marks it ready for printing)
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  label_id: { type: string, format: uuid }
+                  status:   { type: string, example: confirmed }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/labels/{id}:
+    delete:
+      tags: [labels]
+      summary: Delete a label
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  # ── Print (public via api-gateway) ────────────────────────────────────────
+  /v1/labels/{id}/print/pdf:
+    post:
+      tags: [print-public]
+      summary: Create a PDF print job
+      description: Requires **operator** role or above.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:     { type: string, enum: [pdf, zpl], default: pdf }
+                size:       { type: string, example: A4 }
+                copies:     { type: integer, default: 1, minimum: 1 }
+                printer_id: { type: string }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id: { type: string, format: uuid }
+                  status: { type: string, example: queued }
+        '403': { description: Forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { description: Label not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/labels/{id}/print/pdf/{job_id}:
+    get:
+      tags: [print-public]
+      summary: Get print job status
+      description: Requires **operator** role or above.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id,     in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: job_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrintJob' }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/labels/{id}/print/pdf/{job_id}/url:
+    get:
+      tags: [print-public]
+      summary: Get presigned S3 URL to download the generated PDF
+      description: Requires **operator** role or above.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id,     in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: job_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Download URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:  { type: string, format: uuid }
+                  pdf_url: { type: string, format: uri }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/labels/{id}/print/pdf/{job_id}/stream:
+    get:
+      tags: [print-public]
+      summary: Stream real-time print job status via Server-Sent Events
+      description: |
+        Requires **operator** role or above. Polls every ~2 seconds until the job
+        reaches a terminal state (`ready`, `printed`, or `failed`).
+
+        **Event format:**
+        ```
+        event: status
+        data: {"job_id":"...","status":"processing",...}
+        ```
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id,     in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: job_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+  # ── Workspace (public) ─────────────────────────────────────────────────────
+  /v1/workspace:
+    get:
+      tags: [workspace]
+      summary: Get workspace profile
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      responses:
+        '200':
+          description: Workspace
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Workspace' }
+
+  /v1/workspace/profile:
+    put:
+      tags: [workspace]
+      summary: Update workspace profile fields
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:    { type: string }
+                cui:     { type: string }
+                address: { type: string }
+                phone:   { type: string }
+      responses:
+        '200':
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Workspace' }
+
+  /v1/workspace/subscription:
+    get:
+      tags: [workspace]
+      summary: Get current subscription details and quota
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      responses:
+        '200':
+          description: Subscription
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+
+  /v1/workspace/invite:
+    post:
+      tags: [workspace]
+      summary: Invite a team member by email
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                role:  { type: string, enum: [admin, operator, viewer], default: operator }
+      responses:
+        '201':
+          description: Invite sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invite_token: { type: string }
+                  status:       { type: string, example: invited }
+        '403': { description: Forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v1/workspace/invite/{token}:
+    get:
+      tags: [workspace]
+      summary: Accept a workspace invitation
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string, format: uuid }
+                  role:         { type: string }
+
+  /v1/workspace/members:
+    get:
+      tags: [workspace]
+      summary: List active workspace members
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      responses:
+        '200':
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Member' } }
+
+  /v1/workspace/members/{id}:
+    delete:
+      tags: [workspace]
+      summary: Revoke a member's access
+      description: Requires **admin** role. Cannot revoke another admin.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '403': { description: Forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  # ── Billing (public) ───────────────────────────────────────────────────────
+  /v1/billing/create-checkout:
+    post:
+      tags: [billing-public]
+      summary: Create a Stripe checkout session (proxied to workspace-svc :8092)
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan:        { type: string, enum: [starter, business, enterprise] }
+                success_url: { type: string, format: uri }
+                cancel_url:  { type: string, format: uri }
+      responses:
+        '200':
+          description: Checkout session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:        { type: string, format: uri }
+                  session_id: { type: string }
+        '403': { description: Forbidden, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '503': { description: Stripe not configured, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  # ── Admin (public) ─────────────────────────────────────────────────────────
+  /v1/admin/workspaces/{id}/agent-config:
+    get:
+      tags: [admin-public]
+      summary: Get AI agent configuration for a workspace
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Agent config
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentConfig' }
+
+    put:
+      tags: [admin-public]
+      summary: Update AI agent configuration for a workspace
+      description: Requires **admin** role. The `api_key` is encrypted at rest with AES-256-GCM.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vision:      { $ref: '#/components/schemas/ProviderConfig' }
+                translation: { $ref: '#/components/schemas/ProviderConfig' }
+                validation:  { $ref: '#/components/schemas/ProviderConfig' }
+                fallback:    { $ref: '#/components/schemas/ProviderConfig' }
+                ollama_url:  { type: string }
+                api_key:     { type: string, description: "Provider API key — stored encrypted" }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:           { type: boolean }
+                  cache_invalidated: { type: boolean }
+
+  /v1/admin/workspaces/{id}/agent-config/test:
+    post:
+      tags: [admin-public]
+      summary: Test the current agent configuration
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id,   in: path,  required: true, schema: { type: string, format: uuid } }
+        - { name: type, in: query, schema: { type: string, enum: [vision, translation, validation], default: vision } }
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:  { type: boolean }
+                  provider: { type: string }
+                  model:    { type: string }
+
+  /v1/admin/workspaces/{id}/agent-logs:
+    get:
+      tags: [admin-public]
+      summary: Get AI agent call logs for a workspace
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id,    in: path,  required: true,  schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+      responses:
+        '200':
+          description: Logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string }
+                  total:        { type: integer }
+                  logs:         { type: array, items: { $ref: '#/components/schemas/CallLogEntry' } }
+
+  /v1/admin/workspaces/{id}/metrics:
+    get:
+      tags: [admin-public]
+      summary: Get aggregated AI usage metrics for a workspace
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id:      { type: string }
+                  total_calls:       { type: integer }
+                  success_calls:     { type: integer }
+                  total_cost_usd:    { type: number }
+                  total_tokens:      { type: integer }
+                  calls_by_type:     { type: object, additionalProperties: { type: integer } }
+                  calls_by_provider: { type: object, additionalProperties: { type: integer } }
+
+  /v1/admin/workspaces/{id}/rate-limits:
+    get:
+      tags: [admin-public]
+      summary: Get rate limit configuration for a workspace
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Rate limits
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string }
+                  rate_limits:  { $ref: '#/components/schemas/RateLimit' }
+
+    put:
+      tags: [admin-public]
+      summary: Update rate limit configuration for a workspace
+      description: Requires **admin** role.
+      security: [{ bearerAuth: [] }]
+      servers:
+        - url: http://localhost:8080
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RateLimit' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string }
+                  rate_limits:  { $ref: '#/components/schemas/RateLimit' }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRINT-SVC — port 8085 (internal)
+# Called by api-gateway. No JWT — workspace context via query param.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  /jobs:
+    post:
+      tags: [print-svc]
+      summary: Create a print job
+      description: Called by api-gateway after fetching label data. Not JWT-protected — internal only.
+      servers:
+        - url: http://localhost:8085
+          description: print-svc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label_id, workspace_id]
+              properties:
+                label_id:     { type: string, format: uuid }
+                workspace_id: { type: string, format: uuid }
+                user_id:      { type: string, format: uuid }
+                product_id:   { type: string, format: uuid }
+                format:       { type: string, enum: [pdf, zpl], default: pdf }
+                size:         { type: string, example: A4 }
+                copies:       { type: integer, default: 1 }
+                printer_id:   { type: string }
+                label_data:   { $ref: '#/components/schemas/LabelData' }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id: { type: string, format: uuid }
+                  status: { type: string, example: queued }
+
+  /jobs/{id}:
+    get:
+      tags: [print-svc]
+      summary: Get a print job (includes signed PDF URL when ready)
+      servers:
+        - url: http://localhost:8085
+      parameters:
+        - { name: id,           in: path,  required: true, schema: { type: string, format: uuid } }
+        - { name: workspace_id, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrintJob' }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /jobs/{id}/pdf-url:
+    get:
+      tags: [print-svc]
+      summary: Get a fresh presigned S3 URL for a completed PDF job
+      servers:
+        - url: http://localhost:8085
+      parameters:
+        - { name: id,           in: path,  required: true, schema: { type: string, format: uuid } }
+        - { name: workspace_id, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Presigned URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:  { type: string, format: uuid }
+                  pdf_url: { type: string, format: uri }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LABEL-SVC product HTTP — port 8088 (internal)
+# Called by api-gateway. Workspace context via X-Workspace-ID header.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  /products:
+    post:
+      tags: [products-svc]
+      summary: Create a product
+      servers:
+        - url: http://localhost:8088
+          description: label-svc product HTTP
+      parameters:
+        - { name: X-Workspace-ID, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                sku:            { type: string }
+                name:           { type: string }
+                category:       { type: string }
+                default_fields: { type: object, additionalProperties: { type: string, nullable: true } }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+
+    get:
+      tags: [products-svc]
+      summary: List products for a workspace
+      servers:
+        - url: http://localhost:8088
+      parameters:
+        - { name: X-Workspace-ID, in: header, schema: { type: string, format: uuid } }
+        - { name: workspace_id,   in: query,  schema: { type: string, format: uuid }, description: "Fallback if header not set" }
+        - { name: q,              in: query,  schema: { type: string } }
+        - { name: category,       in: query,  schema: { type: string } }
+        - { name: page,           in: query,  schema: { type: integer, default: 1 } }
+        - { name: per_page,       in: query,  schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:    { type: integer }
+                  products: { type: array, items: { $ref: '#/components/schemas/Product' } }
+
+  /products/{id}:
+    get:
+      tags: [products-svc]
+      summary: Get a product by ID
+      servers:
+        - url: http://localhost:8088
+      parameters:
+        - { name: id,           in: path,  required: true, schema: { type: string, format: uuid } }
+        - { name: workspace_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Product
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+    patch:
+      tags: [products-svc]
+      summary: Update a product's name, category, or default fields
+      servers:
+        - url: http://localhost:8088
+      parameters:
+        - { name: id,             in: path,   required: true, schema: { type: string, format: uuid } }
+        - { name: X-Workspace-ID, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:           { type: string }
+                category:       { type: string }
+                default_fields: { type: object, additionalProperties: { type: string, nullable: true } }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+
+  /products/{id}/print:
+    post:
+      tags: [products-svc]
+      summary: Increment the print counter for a product
+      description: Called by print-svc on job completion.
+      servers:
+        - url: http://localhost:8088
+      parameters:
+        - { name: id,             in: path,   required: true, schema: { type: string, format: uuid } }
+        - { name: X-Workspace-ID, in: header, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Counter incremented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WORKSPACE-SVC billing HTTP — port 8092 (internal)
+# POST /checkout called by api-gateway. POST /webhook called by Stripe.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  /checkout:
+    post:
+      tags: [billing-svc]
+      summary: Create a Stripe checkout session
+      description: |
+        Called by api-gateway after JWT auth. Workspace context is forwarded
+        via headers. Returns a Stripe hosted checkout URL.
+      servers:
+        - url: http://localhost:8092
+          description: workspace-svc billing HTTP
+      parameters:
+        - { name: X-Workspace-ID, in: header, required: true, schema: { type: string, format: uuid } }
+        - { name: X-Email,        in: header, required: true, schema: { type: string, format: email } }
+        - { name: X-Name,         in: header, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan:        { type: string, enum: [starter, business, enterprise] }
+                success_url: { type: string, format: uri }
+                cancel_url:  { type: string, format: uri }
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:        { type: string, format: uri }
+                  session_id: { type: string }
+        '400': { description: Invalid plan, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '503': { description: Stripe not configured, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /webhook:
+    post:
+      tags: [billing-svc]
+      summary: Stripe webhook receiver
+      description: |
+        Called directly by Stripe. Verifies the `Stripe-Signature` header
+        (HMAC-SHA256, 5-minute replay window).
+
+        Handled events:
+        - `checkout.session.completed` → sets subscription & plan
+        - `customer.subscription.updated` → updates plan & period end
+        - `customer.subscription.deleted` → downgrades to `free`
+      servers:
+        - url: http://localhost:8092
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema: { type: string }
+          description: "Format: `t=<timestamp>,v1=<hmac>`"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw Stripe event payload
+      responses:
+        '200': { description: Event processed }
+        '401': { description: Invalid signature }
+        '400': { description: Bad payload }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AGENT-SVC admin HTTP — port 9084 (internal)
+# No auth — firewalled at network level. Called by api-gateway only.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  /internal/call-logs:
+    get:
+      tags: [agent-admin-svc]
+      summary: Get AI agent call logs for a workspace
+      servers:
+        - url: http://localhost:9084
+          description: agent-svc admin HTTP
+      parameters:
+        - { name: workspace_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: limit,        in: query, schema: { type: integer, default: 100, maximum: 500 } }
+      responses:
+        '200':
+          description: Logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string }
+                  total:        { type: integer }
+                  logs:         { type: array, items: { $ref: '#/components/schemas/CallLogEntry' } }
+
+  /internal/metrics:
+    get:
+      tags: [agent-admin-svc]
+      summary: Get aggregated AI usage metrics for a workspace
+      servers:
+        - url: http://localhost:9084
+      parameters:
+        - { name: workspace_id, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Aggregated metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id:      { type: string }
+                  total_calls:       { type: integer }
+                  success_calls:     { type: integer }
+                  total_cost_usd:    { type: number }
+                  total_tokens:      { type: integer }
+                  calls_by_type:     { type: object, additionalProperties: { type: integer } }
+                  calls_by_provider: { type: object, additionalProperties: { type: integer } }
+
+  /internal/workspaces/{id}/rate-limits:
+    get:
+      tags: [agent-admin-svc]
+      summary: Get in-memory rate limits for a workspace
+      servers:
+        - url: http://localhost:9084
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Rate limits
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string }
+                  rate_limits:  { $ref: '#/components/schemas/RateLimit' }
+
+    put:
+      tags: [agent-admin-svc]
+      summary: Set in-memory rate limits for a workspace
+      description: Stored in memory (sync.Map) — resets on service restart.
+      servers:
+        - url: http://localhost:9084
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RateLimit' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string }
+                  rate_limits:  { $ref: '#/components/schemas/RateLimit' }

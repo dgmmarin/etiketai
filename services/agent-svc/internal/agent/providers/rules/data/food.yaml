@@ -1,0 +1,15 @@
+version: "1.0.0"
+category: food
+rules:
+  - field: ingredients
+    severity: blocker
+    message: "Lista ingredientelor este obligatorie (Reg. UE 1169/2011 art. 18)"
+  - field: expiry_date
+    severity: blocker
+    message: "Data durabilității minimale trebuie indicată (Reg. UE 1169/2011 art. 24)"
+  - field: storage_conditions
+    severity: warning
+    message: "Condițiile de depozitare sunt recomandate (Reg. UE 1169/2011 art. 25)"
+  - field: allergens
+    severity: warning
+    message: "Alergenii trebuie evidențiați în lista ingredientelor (Reg. UE 1169/2011 art. 21)"

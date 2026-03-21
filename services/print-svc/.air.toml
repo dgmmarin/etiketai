@@ -1,0 +1,22 @@
+root = "."
+tmp_dir = ".air"
+
+[build]
+  cmd = "go build -o .air/server ./cmd/server"
+  bin = ".air/server"
+  full_bin = ".air/server"
+  include_ext = ["go"]
+  exclude_dir = [".air", "vendor"]
+  delay = 1000
+
+[log]
+  time = false
+
+[color]
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[misc]
+  clean_on_exit = false

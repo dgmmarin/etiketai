@@ -1,0 +1,199 @@
+syntax = "proto3";
+
+package workspace.v1;
+
+option go_package = "github.com/dgmmarin/etiketai/gen/workspace/v1;workspacev1";
+
+service WorkspaceService {
+  // Called by api-gateway during user registration
+  rpc CreateWorkspace(CreateWorkspaceRequest)     returns (CreateWorkspaceResponse);
+  // Called by api-gateway during login to resolve workspace + role by email
+  rpc GetMemberByEmail(GetMemberByEmailRequest)   returns (GetMemberByEmailResponse);
+
+  rpc GetWorkspace(GetWorkspaceRequest)           returns (Workspace);
+  rpc UpdateProfile(UpdateProfileRequest)         returns (Workspace);
+  rpc GetSubscription(GetSubscriptionRequest)     returns (Subscription);
+  rpc CreateCheckoutSession(CheckoutRequest)      returns (CheckoutResponse);
+  rpc HandleStripeWebhook(WebhookRequest)         returns (WebhookResponse);
+  rpc IncrementQuota(IncrementQuotaRequest)       returns (QuotaResponse);
+  rpc CheckQuota(CheckQuotaRequest)               returns (QuotaResponse);
+  rpc ResetMonthlyQuota(ResetQuotaRequest)        returns (ResetQuotaResponse);
+
+  // Members
+  rpc InviteMember(InviteMemberRequest)           returns (InviteMemberResponse);
+  rpc AcceptInvitation(AcceptInvitationRequest)   returns (AcceptInvitationResponse);
+  rpc ListMembers(ListMembersRequest)             returns (ListMembersResponse);
+  rpc RevokeMember(RevokeMemberRequest)           returns (RevokeMemberResponse);
+  rpc GetMemberRole(GetMemberRoleRequest)         returns (GetMemberRoleResponse);
+}
+
+// ─── Workspace ────────────────────────────────────────────────────────────────
+
+message CreateWorkspaceRequest {
+  string owner_user_id = 1;
+  string owner_email   = 2;
+  string name          = 3;
+  string cui           = 4;
+}
+
+message CreateWorkspaceResponse {
+  string workspace_id = 1;
+}
+
+message GetMemberByEmailRequest {
+  string email = 1;
+}
+
+message GetMemberByEmailResponse {
+  string workspace_id = 1;
+  string role         = 2; // admin | operator | viewer
+  bool   found        = 3;
+}
+
+message GetWorkspaceRequest {
+  string workspace_id = 1;
+}
+
+message Workspace {
+  string id                      = 1;
+  string name                    = 2;
+  string cui                     = 3;
+  string plan                    = 4; // starter | business | enterprise
+  int32  label_quota_monthly     = 5;
+  int32  label_quota_used        = 6;
+  string logo_url                = 7;
+  string created_at              = 8;
+}
+
+message UpdateProfileRequest {
+  string workspace_id = 1;
+  string name         = 2;
+  string cui          = 3;
+  string address      = 4;
+  string phone        = 5;
+  string logo_s3_key  = 6;
+}
+
+// ─── Subscription ─────────────────────────────────────────────────────────────
+
+message GetSubscriptionRequest {
+  string workspace_id = 1;
+}
+
+message Subscription {
+  string workspace_id         = 1;
+  string plan                 = 2;
+  int32  label_quota_monthly  = 3;
+  int32  label_quota_used     = 4;
+  string subscription_expires = 5;
+  bool   is_active            = 6;
+}
+
+message CheckoutRequest {
+  string workspace_id = 1;
+  string price_id     = 2; // Stripe price ID
+  string success_url  = 3;
+  string cancel_url   = 4;
+}
+
+message CheckoutResponse {
+  string session_id  = 1;
+  string checkout_url= 2;
+}
+
+message WebhookRequest {
+  bytes  payload   = 1;
+  string signature = 2;
+}
+
+message WebhookResponse {
+  bool success = 1;
+}
+
+// ─── Quota ────────────────────────────────────────────────────────────────────
+
+message IncrementQuotaRequest {
+  string workspace_id = 1;
+  int32  amount       = 2; // default 1
+}
+
+message CheckQuotaRequest {
+  string workspace_id = 1;
+}
+
+message QuotaResponse {
+  bool  allowed          = 1;
+  int32 quota_used       = 2;
+  int32 quota_monthly    = 3;
+  int32 quota_remaining  = 4;
+}
+
+message ResetQuotaRequest {
+  string workspace_id = 1; // empty = reset all workspaces
+}
+
+message ResetQuotaResponse {
+  int32 workspaces_reset = 1;
+}
+
+// ─── Members ──────────────────────────────────────────────────────────────────
+
+message InviteMemberRequest {
+  string workspace_id     = 1;
+  string email            = 2;
+  string role             = 3; // admin | operator | viewer
+  string invited_by       = 4; // user_id
+}
+
+message InviteMemberResponse {
+  string invite_token  = 1;
+  string expires_at    = 2;
+}
+
+message AcceptInvitationRequest {
+  string token   = 1;
+  string user_id = 2;
+}
+
+message AcceptInvitationResponse {
+  bool   success      = 1;
+  string workspace_id = 2;
+  string role         = 3;
+}
+
+message ListMembersRequest {
+  string workspace_id = 1;
+}
+
+message ListMembersResponse {
+  repeated Member members = 1;
+}
+
+message Member {
+  string id           = 1;
+  string user_id      = 2;
+  string email        = 3;
+  string role         = 4;
+  string invited_at   = 5;
+  string accepted_at  = 6;
+  bool   is_pending   = 7;
+}
+
+message RevokeMemberRequest {
+  string workspace_id = 1;
+  string member_id    = 2;
+}
+
+message RevokeMemberResponse {
+  bool success = 1;
+}
+
+message GetMemberRoleRequest {
+  string workspace_id = 1;
+  string user_id      = 2;
+}
+
+message GetMemberRoleResponse {
+  string role   = 1; // admin | operator | viewer | "" (not a member)
+  bool   found  = 2;
+}

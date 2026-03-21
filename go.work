@@ -1,0 +1,13 @@
+go 1.26.1
+
+use (
+	./gen
+	./services/admin-svc
+	./services/agent-svc
+	./services/api-gateway
+	./services/auth-svc
+	./services/label-svc
+	./services/notification-svc
+	./services/print-svc
+	./services/workspace-svc
+)

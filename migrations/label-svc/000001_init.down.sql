@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS print_jobs;
+DROP TABLE IF EXISTS label_audit_log;
+DROP TABLE IF EXISTS labels;
+DROP TABLE IF EXISTS products;

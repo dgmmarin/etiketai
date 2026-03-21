@@ -1,0 +1,18 @@
+version: "1.0.0"
+category: electronics
+rules:
+  - field: manufacturer
+    severity: blocker
+    message: "Producătorul / importatorul UE este obligatoriu (Reg. UE 2019/1020)"
+  - field: model_number
+    severity: blocker
+    message: "Numărul de model / tipul trebuie indicat (Reg. UE 2019/1020 art. 7)"
+  - field: ce_marking
+    severity: blocker
+    message: "Marcajul CE este obligatoriu (Directiva 2014/30/UE)"
+  - field: warnings
+    severity: warning
+    message: "Instrucțiunile de siguranță sunt recomandate (Directiva 2014/35/UE)"
+  - field: rohs_compliance
+    severity: warning
+    message: "Conformitatea RoHS este recomandată (Directiva 2011/65/UE)"
