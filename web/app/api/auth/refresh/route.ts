@@ -22,5 +22,16 @@ export async function POST(req: NextRequest) {
   }
 
   const data = await upstream.json();
-  return NextResponse.json(data);
+  const res = NextResponse.json(data);
+  // Rotate the httpOnly cookie so the next page load can silent-refresh again.
+  if (data.refresh_token) {
+    res.cookies.set("rt", data.refresh_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+  }
+  return res;
 }

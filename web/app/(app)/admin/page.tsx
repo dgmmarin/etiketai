@@ -238,8 +238,8 @@ function AdminContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {logsData.logs.map((log) => (
-                        <tr key={log.id} className="border-b last:border-0">
+                      {logsData.logs.map((log, i) => (
+                        <tr key={i} className="border-b last:border-0">
                           <td className="px-3 py-2">{log.agent_type}</td>
                           <td className="px-3 py-2">{log.provider}</td>
                           <td className="px-3 py-2 text-muted-foreground">{log.model}</td>
@@ -249,8 +249,8 @@ function AdminContent() {
                             </span>
                           </td>
                           <td className="px-3 py-2">{log.latency_ms}ms</td>
-                          <td className="px-3 py-2">{log.tokens_used}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{formatDate(log.created_at)}</td>
+                          <td className="px-3 py-2">{(log.tokens_input ?? 0) + (log.tokens_output ?? 0)}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{log.called_at ? formatDate(log.called_at) : "—"}</td>
                         </tr>
                       ))}
                     </tbody>

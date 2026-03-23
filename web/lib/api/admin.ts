@@ -18,16 +18,18 @@ export interface AgentConfig {
 }
 
 export interface CallLogEntry {
-  id: string;
   workspace_id: string;
+  label_id: string;
   agent_type: string;
   provider: string;
   model: string;
   success: boolean;
   latency_ms: number;
-  tokens_used: number;
-  error?: string;
-  created_at: string;
+  tokens_input: number;
+  tokens_output: number;
+  cost_usd: number;
+  error_message?: string;
+  called_at: string;
 }
 
 export interface Metrics {

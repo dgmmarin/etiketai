@@ -196,12 +196,13 @@ func (r *WorkspaceRepo) CheckQuota(ctx context.Context, workspaceID string) (boo
 	return used < monthly, used, err
 }
 
-// ListMembers returns active members of a workspace.
+// ListMembers returns active (accepted) members of a workspace.
 func (r *WorkspaceRepo) ListMembers(ctx context.Context, workspaceID string) ([]WorkspaceMember, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, workspace_id, user_id, COALESCE(email,''), role
 		FROM workspace_members
 		WHERE workspace_id = $1
+		  AND accepted_at IS NOT NULL
 		  AND revoked_at IS NULL
 		ORDER BY invited_at
 	`, workspaceID)
@@ -226,7 +227,7 @@ func (r *WorkspaceRepo) InviteMember(ctx context.Context, workspaceID, email, ro
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO workspace_members (workspace_id, email, role, invite_token_hash, invited_by_user_id)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (workspace_id, user_id) DO NOTHING
+		ON CONFLICT (workspace_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL DO NOTHING
 	`, workspaceID, email, role, tokenHash, nilIfEmpty(invitedByUserID))
 	return err
 }

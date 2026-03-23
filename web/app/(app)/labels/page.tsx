@@ -119,7 +119,7 @@ export default function LabelsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            {data ? `${data.total} etichete` : "Etichete"}
+            {data ? `${data.pagination.total} etichete` : "Etichete"}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -127,7 +127,7 @@ export default function LabelsPage() {
             <div className="flex justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : !data?.labels?.length ? (
+          ) : !data?.data?.length ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
               {statusFilter ? "Nicio etichetă cu acest status." : "Nicio etichetă. Încarcă prima ta etichetă."}
             </p>
@@ -142,11 +142,11 @@ export default function LabelsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.labels.map((label) => (
+                {data.data.map((label) => (
                   <tr key={label.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
                       <Link href={`/labels/${label.id}`} className="text-primary hover:underline truncate block max-w-xs">
-                        {label.original_filename}
+                        {label.product_name ?? label.id}
                       </Link>
                     </td>
                     <td className="px-4 py-3">
@@ -154,7 +154,7 @@ export default function LabelsPage() {
                         {label.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDate(label.created_at)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{label.created_at ? formatDate(label.created_at) : "—"}</td>
                     <td className="px-4 py-3 text-right">
                       {hasRole(role, "admin") && (
                         <Button
@@ -193,15 +193,15 @@ export default function LabelsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {data && data.total > 20 && (
+      {data && data.pagination.total > 20 && (
         <div className="flex justify-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
             Anterior
           </Button>
           <span className="flex items-center text-sm text-muted-foreground">
-            Pagina {page} din {Math.ceil(data.total / 20)}
+            Pagina {page} din {Math.ceil(data.pagination.total / 20)}
           </span>
-          <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)} disabled={page >= Math.ceil(data.total / 20)}>
+          <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)} disabled={page >= Math.ceil(data.pagination.total / 20)}>
             Următor
           </Button>
         </div>

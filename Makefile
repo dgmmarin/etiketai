@@ -31,6 +31,7 @@ migrate:
 	@$(COMPOSE) exec -T auth-db      psql -U postgres -d auth_db      -v ON_ERROR_STOP=0 -f /dev/stdin < migrations/auth-svc/000001_init.up.sql      2>/dev/null; true
 	@$(COMPOSE) exec -T auth-db      psql -U postgres -d auth_db      -v ON_ERROR_STOP=0 -f /dev/stdin < migrations/auth-svc/000002_superadmin.up.sql  2>/dev/null; true
 	@$(COMPOSE) exec -T workspace-db psql -U postgres -d workspace_db -v ON_ERROR_STOP=0 -f /dev/stdin < migrations/workspace-svc/000001_init.up.sql 2>/dev/null; true
+	@$(COMPOSE) exec -T workspace-db psql -U postgres -d workspace_db -v ON_ERROR_STOP=0 -f /dev/stdin < migrations/workspace-svc/000002_nullable_invite_user.up.sql 2>/dev/null; true
 	@$(COMPOSE) exec -T label-db     psql -U postgres -d label_db     -v ON_ERROR_STOP=0 -f /dev/stdin < migrations/label-svc/000001_init.up.sql     2>/dev/null; true
 	@$(COMPOSE) exec -T agent-db     psql -U postgres -d agent_db     -v ON_ERROR_STOP=0 -f /dev/stdin < migrations/agent-svc/000001_init.up.sql     2>/dev/null; true
 	@$(COMPOSE) exec -T print-db     psql -U postgres -d print_db     -v ON_ERROR_STOP=0 -f /dev/stdin < migrations/print-svc/000001_init.up.sql     2>/dev/null; true
@@ -77,6 +78,29 @@ web:
 .PHONY: web-build
 web-build:
 	cd web && npm run build
+
+.PHONY: test-web
+test-web:
+	@echo "Running Playwright E2E tests against http://localhost:3000 ..."
+	@echo "(requires: make start && make seed && make web running in another terminal)"
+	cd web && npm run test:e2e
+
+.PHONY: test-web-ui
+test-web-ui:
+	cd web && npm run test:e2e:ui
+
+# ── API Integration Tests ────────────────────────────────────────────────────
+
+.PHONY: test-api
+test-api:
+	@echo "Running API integration tests against http://localhost:8080 ..."
+	@echo "(requires: make start && make seed)"
+	cd tests/api && GOWORK=off go test -v -timeout 120s .
+
+.PHONY: test-api-url
+test-api-url:
+	@echo "Running API integration tests against $(URL) ..."
+	cd tests/api && GOWORK=off TEST_API_URL=$(URL) go test -v -timeout 120s .
 
 # ── Nuke everything (including volumes) ──────────────────────────────────────
 

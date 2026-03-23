@@ -8,11 +8,11 @@ export interface FieldValue {
 
 export interface LabelListItem {
   id: string;
-  workspace_id: string;
-  original_filename: string;
   status: string;
-  created_at: string;
-  updated_at: string;
+  product_name?: string;
+  category?: string;
+  compliance_score?: number;
+  created_at?: string;
 }
 
 export interface LabelStatus {
@@ -49,8 +49,8 @@ export interface PrintJob {
 }
 
 export interface LabelsListResponse {
-  labels: LabelListItem[];
-  total: number;
+  data: LabelListItem[];
+  pagination: { total: number; page: number; per_page: number };
 }
 
 export const labelsApi = {

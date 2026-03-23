@@ -179,7 +179,7 @@ export default function WorkspacePage() {
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : !membersData?.members?.length ? (
+          ) : !membersData?.data?.length ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Niciun membru.</p>
           ) : (
             <table className="w-full text-sm">
@@ -192,11 +192,11 @@ export default function WorkspacePage() {
                 </tr>
               </thead>
               <tbody>
-                {membersData.members.map((m) => (
+                {membersData.data.map((m) => (
                   <tr key={m.id} className="border-b last:border-0">
                     <td className="px-4 py-3">{m.email}</td>
                     <td className="px-4 py-3 capitalize">{m.role}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDate(m.joined_at)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{m.accepted_at ? formatDate(m.accepted_at) : "—"}</td>
                     <td className="px-4 py-3 text-right">
                       {hasRole(role, "admin") && (
                         <Button

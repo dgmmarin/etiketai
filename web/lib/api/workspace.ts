@@ -15,7 +15,7 @@ export interface Member {
   user_id: string;
   email: string;
   role: string;
-  joined_at: string;
+  accepted_at?: string;
 }
 
 export interface Subscription {
@@ -37,10 +37,10 @@ export const workspaceApi = {
     api.get<Subscription>("/v1/workspace/subscription"),
 
   listMembers: () =>
-    api.get<{ members: Member[] }>("/v1/workspace/members"),
+    api.get<{ data: Member[] }>("/v1/workspace/members"),
 
   inviteMember: (email: string, role: string) =>
-    api.post<{ message: string }>("/v1/workspace/invite", { email, role }),
+    api.post<{ invite_token: string; status: string }>("/v1/workspace/invite", { email, role }),
 
   revokeMember: (memberId: string) =>
     api.delete<{ success: boolean }>(`/v1/workspace/members/${memberId}`),

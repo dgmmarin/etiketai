@@ -4,7 +4,8 @@
       "Bash(pip install:*)",
       "Bash(python3 -c \":*)",
       "Bash(pip3 install:*)",
-      "Bash(python3 -m pip install python-docx -q)"
+      "Bash(python3 -m pip install python-docx -q)",
+      "Bash(grep -n \"original_filename\\\\|filename\\\\|LabelListItem\\\\|ListLabel\\\\|Data\\\\b\" /home/daniel/projects/diverse/etiket-ai/gen/label/v1/*.go)"
     ]
   }
 }

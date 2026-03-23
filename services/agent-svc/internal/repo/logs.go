@@ -8,18 +8,18 @@ import (
 )
 
 type CallLogEntry struct {
-	WorkspaceID  string
-	LabelID      string
-	AgentType    string
-	Provider     string
-	Model        string
-	TokensInput  int
-	TokensOutput int
-	CostUSD      float64
-	LatencyMS    int
-	Success      bool
-	ErrorMessage string
-	CalledAt     time.Time
+	WorkspaceID  string    `json:"workspace_id"`
+	LabelID      string    `json:"label_id"`
+	AgentType    string    `json:"agent_type"`
+	Provider     string    `json:"provider"`
+	Model        string    `json:"model"`
+	TokensInput  int       `json:"tokens_input"`
+	TokensOutput int       `json:"tokens_output"`
+	CostUSD      float64   `json:"cost_usd"`
+	LatencyMS    int       `json:"latency_ms"`
+	Success      bool      `json:"success"`
+	ErrorMessage string    `json:"error_message,omitempty"`
+	CalledAt     time.Time `json:"called_at"`
 }
 
 type CallLogRepo struct {
