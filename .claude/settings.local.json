@@ -5,7 +5,27 @@
       "Bash(python3 -c \":*)",
       "Bash(pip3 install:*)",
       "Bash(python3 -m pip install python-docx -q)",
-      "Bash(grep -n \"original_filename\\\\|filename\\\\|LabelListItem\\\\|ListLabel\\\\|Data\\\\b\" /home/daniel/projects/diverse/etiket-ai/gen/label/v1/*.go)"
+      "Bash(grep -n \"original_filename\\\\|filename\\\\|LabelListItem\\\\|ListLabel\\\\|Data\\\\b\" /home/daniel/projects/diverse/etiket-ai/gen/label/v1/*.go)",
+      "Bash(ls *.md)",
+      "Bash(find /home/daniel/projects/diverse/etiket-ai -name user-stories* -o -name USER-STORIES*)",
+      "Bash(npx --prefix web playwright test)",
+      "Bash(ls /home/daniel/projects/diverse/etiket-ai/web/app/\\\\\\(app\\\\\\)/)",
+      "Bash(make test-web:*)",
+      "Bash(find /home/daniel/projects -name *.go -o -name *.py -o -name *.ts -o -name *.js)",
+      "Bash(find /home/daniel/projects -type d -name *agile* -o -type d -name *discord* -o -type d -name *signal*)",
+      "Bash(curl -s -X POST http://localhost:8080/v1/auth/login -H 'Content-Type: application/json' -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@demo.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Admin1234!\"\"\"\"}')",
+      "Bash(grep -r \"admin@demo\\\\|bbbbbbbb\" /home/daniel/projects/diverse/etiket-ai --include=*.go --include=*.sql --include=*.sh -l)",
+      "Bash(curl -s -X POST http://localhost:8080/v1/auth/login -H 'Content-Type: application/json' -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@demo.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"DevPass123!\"\"\"\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''''Login OK, role:'''', d[''''user''''][''''role'''']\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3030/login)",
+      "Bash(curl -s -X POST http://localhost:3030/api/auth/set-refresh -H 'Content-Type: application/json' -d '{\"\"\"\"refresh_token\"\"\"\":\"\"\"\"test\"\"\"\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''''RT:'''', d[''''refresh_token''''][:20]\\)\")",
+      "Bash(curl -s http://localhost:3030/)",
+      "Bash(curl -s http://localhost:9000/minio/health/live)",
+      "Bash(flutter --version)",
+      "Bash(curl -s https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json)",
+      "Bash(python3 -c \"import sys,json; r=json.load\\(sys.stdin\\); print\\(r[''''releases''''][0][''''version''''], r[''''releases''''][0][''''archive'''']\\)\")",
+      "Bash(snap run:*)"
     ]
   }
 }

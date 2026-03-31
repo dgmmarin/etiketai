@@ -13,14 +13,13 @@ export interface LabelListItem {
   category?: string;
   compliance_score?: number;
   created_at?: string;
+  image_thumb_url?: string;
 }
 
 export interface LabelStatus {
-  id: string;
+  label_id: string;
   status: string;
   fields: Record<string, FieldValue>;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface ComplianceResult {
@@ -48,16 +47,32 @@ export interface PrintJob {
   completed_at?: string;
 }
 
+export interface LabelDetail {
+  id: string;
+  workspace_id: string;
+  status: string;
+  category?: string;
+  detected_language?: string;
+  image_url?: string;
+  fields?: Record<string, { value: string; confidence: number }>;
+  compliance?: { score: number; missing: { field: string; severity: string }[] };
+  created_at?: string;
+  confirmed_at?: string;
+}
+
 export interface LabelsListResponse {
   data: LabelListItem[];
   pagination: { total: number; page: number; per_page: number };
 }
 
 export const labelsApi = {
-  list: (params?: { status?: string; page?: number; per_page?: number }) =>
+  list: (params?: { status?: string; category?: string; q?: string; from?: string; to?: string; page?: number; per_page?: number }) =>
     api.get<LabelsListResponse>("/v1/labels?" + new URLSearchParams(
       Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
     )),
+
+  get: (id: string) =>
+    api.get<LabelDetail>(`/v1/labels/${id}`),
 
   getStatus: (id: string) =>
     api.get<LabelStatus>(`/v1/labels/${id}/status`),

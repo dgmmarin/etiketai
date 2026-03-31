@@ -2,11 +2,12 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
-import { Upload, Loader2, Trash2, Download } from "lucide-react";
+import { Upload, Loader2, Trash2, Download, Search, X, CalendarIcon } from "lucide-react";
 import { useLabels, useUploadLabel, useDeleteLabel } from "@/lib/hooks/useLabels";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { hasRole } from "@/lib/utils/roleGuard";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -19,12 +20,17 @@ import { STATUS_COLORS, formatDate } from "@/lib/utils/formatters";
 import { API_URL } from "@/lib/api/client";
 
 const STATUS_OPTIONS = ["pending", "processing", "needs_review", "confirmed", "failed"];
+const CATEGORY_OPTIONS = ["food", "cosmetic", "electronics", "toy", "other"];
 
 export default function LabelsPage() {
   const role = useAuthStore((s) => s.user?.role);
   const token = useAuthStore((s) => s.accessToken);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -33,6 +39,10 @@ export default function LabelsPage() {
     page,
     per_page: 20,
     status: statusFilter || undefined,
+    category: categoryFilter || undefined,
+    q: search || undefined,
+    from: fromDate || undefined,
+    to: toDate || undefined,
   });
   const uploadMut = useUploadLabel();
   const deleteMut = useDeleteLabel();
@@ -74,6 +84,27 @@ export default function LabelsPage() {
     setPage(1);
   }
 
+  function handleCategoryChange(v: string) {
+    setCategoryFilter(v === "all" ? "" : v);
+    setPage(1);
+  }
+
+  function handleSearch(v: string) {
+    setSearch(v);
+    setPage(1);
+  }
+
+  function clearFilters() {
+    setStatusFilter("");
+    setCategoryFilter("");
+    setSearch("");
+    setFromDate("");
+    setToDate("");
+    setPage(1);
+  }
+
+  const hasActiveFilters = statusFilter || categoryFilter || search || fromDate || toDate;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -102,7 +133,17 @@ export default function LabelsPage() {
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Caută după produs..."
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-8 w-56"
+            aria-label="Caută etichete"
+          />
+        </div>
         <Select value={statusFilter || "all"} onValueChange={handleStatusChange}>
           <SelectTrigger className="w-44">
             <SelectValue placeholder="Toate statusurile" />
@@ -114,6 +155,41 @@ export default function LabelsPage() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={categoryFilter || "all"} onValueChange={handleCategoryChange}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Toate categoriile" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toate categoriile</SelectItem>
+            {CATEGORY_OPTIONS.map((c) => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-1.5">
+          <CalendarIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Input
+            type="date"
+            value={fromDate}
+            onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
+            className="w-36 text-sm"
+            aria-label="De la dată"
+          />
+          <span className="text-muted-foreground text-sm">—</span>
+          <Input
+            type="date"
+            value={toDate}
+            onChange={(e) => { setToDate(e.target.value); setPage(1); }}
+            className="w-36 text-sm"
+            aria-label="Până la dată"
+          />
+        </div>
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            <X className="h-3.5 w-3.5 mr-1" />
+            Resetează filtre
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -129,14 +205,17 @@ export default function LabelsPage() {
             </div>
           ) : !data?.data?.length ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
-              {statusFilter ? "Nicio etichetă cu acest status." : "Nicio etichetă. Încarcă prima ta etichetă."}
+              {hasActiveFilters ? "Nicio etichetă pentru filtrele selectate." : "Nicio etichetă. Încarcă prima ta etichetă."}
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
+                  <th className="px-4 py-3 w-14" />
                   <th className="px-4 py-3 text-left font-medium">Fișier</th>
+                  <th className="px-4 py-3 text-left font-medium">Categorie</th>
                   <th className="px-4 py-3 text-left font-medium">Status</th>
+                  <th className="px-4 py-3 text-left font-medium">Conformitate</th>
                   <th className="px-4 py-3 text-left font-medium">Data</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -145,14 +224,35 @@ export default function LabelsPage() {
                 {data.data.map((label) => (
                   <tr key={label.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
+                      {label.image_thumb_url ? (
+                        <img
+                          src={label.image_thumb_url}
+                          alt=""
+                          className="h-10 w-10 rounded object-cover border border-border"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-muted-foreground text-xs">
+                          —
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       <Link href={`/labels/${label.id}`} className="text-primary hover:underline truncate block max-w-xs">
                         {label.product_name ?? label.id}
                       </Link>
                     </td>
+                    <td className="px-4 py-3 text-muted-foreground capitalize">{label.category ?? "—"}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[label.status] ?? "bg-gray-100 text-gray-700"}`}>
                         {label.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {label.compliance_score != null ? (
+                        <span className={`text-xs font-medium ${label.compliance_score >= 80 ? "text-green-600" : label.compliance_score >= 50 ? "text-orange-500" : "text-red-500"}`}>
+                          {label.compliance_score}%
+                        </span>
+                      ) : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{label.created_at ? formatDate(label.created_at) : "—"}</td>
                     <td className="px-4 py-3 text-right">

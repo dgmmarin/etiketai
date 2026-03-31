@@ -28,6 +28,7 @@ test.describe("Labels / List", () => {
   test("displays label count and table", async () => {
     await expect(page.getByText(/etichete/)).toBeVisible({ timeout: 8_000 });
     await expect(page.getByRole("columnheader", { name: "Fișier" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Categorie" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Status" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Data" })).toBeVisible();
   });
@@ -38,6 +39,24 @@ test.describe("Labels / List", () => {
 
   test("export CSV button is visible for admin", async () => {
     await expect(page.getByRole("button", { name: /Export CSV/ })).toBeVisible();
+  });
+
+  test("search input filters labels by product name", async () => {
+    const searchInput = page.getByPlaceholder("Caută după produs...");
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill("nonexistent-xyz-12345");
+    await page.waitForTimeout(400);
+    await expect(page.getByText(/etichete/)).toBeVisible({ timeout: 5_000 });
+    await searchInput.clear();
+  });
+
+  test("category filter changes the list", async () => {
+    const statusSelect = page.getByRole("combobox").nth(1);
+    await statusSelect.click();
+    await page.getByRole("option", { name: "food" }).click();
+    await expect(page.getByText(/etichete/)).toBeVisible({ timeout: 5_000 });
+    await statusSelect.click();
+    await page.getByRole("option", { name: "Toate categoriile" }).click();
   });
 
   test("filter by status 'confirmed' updates the list", async () => {
@@ -54,11 +73,14 @@ test.describe("Labels / List", () => {
     await expect(page.getByText(/etichete/)).toBeVisible({ timeout: 5_000 });
   });
 
-  test("reset filter to all statuses", async () => {
+  test("reset filter clears all filters", async () => {
+    // Set a filter then reset
     const trigger = page.getByRole("combobox").first();
     await trigger.click();
-    await page.getByRole("option", { name: "Toate statusurile" }).click();
+    await page.getByRole("option", { name: "confirmed" }).click();
+    await page.getByRole("button", { name: /Resetează filtre/ }).click();
     await expect(page.getByText(/etichete/)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: /Resetează filtre/ })).not.toBeVisible();
   });
 });
 
@@ -70,8 +92,8 @@ test.describe("Labels / Detail", () => {
     const firstLink = page.locator("table a").first();
     await firstLink.click();
     await page.waitForURL(/\/labels\/.+/);
-    // Detail page should render a heading or field content
-    await expect(page.locator("h1, h2, h3").first()).toBeVisible({ timeout: 8_000 });
+    // Detail page renders label ID in h1 once data loads
+    await expect(page.locator("h1").filter({ hasNotText: "" })).toBeVisible({ timeout: 10_000 });
     // Navigate back
     await page.goBack();
     await page.waitForURL("/labels");

@@ -19,6 +19,37 @@ import type { AgentConfig } from "@/lib/api/admin";
 
 const PROVIDERS = ["anthropic", "ollama", "rules_engine"];
 
+// Mirrors agent-svc/internal/agent/pricing.go — USD per 1K tokens
+const PRICING: Record<string, { input: number; output: number }> = {
+  "anthropic:claude-opus-4-6":          { input: 0.015,   output: 0.075 },
+  "anthropic:claude-sonnet-4-6":        { input: 0.003,   output: 0.015 },
+  "anthropic:claude-haiku-4-5":         { input: 0.00025, output: 0.00125 },
+  "anthropic:claude-3-5-sonnet-latest": { input: 0.003,   output: 0.015 },
+  "anthropic:claude-3-5-haiku-latest":  { input: 0.00025, output: 0.00125 },
+  "anthropic:claude-3-opus-latest":     { input: 0.015,   output: 0.075 },
+  "openai:gpt-4o":                      { input: 0.005,   output: 0.015 },
+  "openai:gpt-4o-mini":                 { input: 0.00015, output: 0.0006 },
+  "openai:gpt-4-turbo":                 { input: 0.01,    output: 0.03 },
+  "ollama:*":                           { input: 0,       output: 0 },
+};
+
+// Estimated tokens per label call (approximation based on typical label text)
+const AVG_TOKENS = { vision: { in: 1800, out: 600 }, translation: { in: 1200, out: 400 } };
+
+function estimateCostPer1000(
+  vision: { provider: string; model?: string },
+  translation: { provider: string; model?: string },
+): number {
+  function callCost(cfg: { provider: string; model?: string }, avg: { in: number; out: number }) {
+    const key = `${cfg.provider}:${cfg.model ?? ""}`;
+    const p = PRICING[key] ?? (cfg.provider === "ollama" ? PRICING["ollama:*"] : null);
+    if (!p) return 0;
+    return (avg.in / 1000) * p.input + (avg.out / 1000) * p.output;
+  }
+  const perLabel = callCost(vision, AVG_TOKENS.vision) + callCost(translation, AVG_TOKENS.translation);
+  return perLabel * 1000;
+}
+
 function ProviderRow({
   label,
   value,
@@ -205,6 +236,20 @@ function AdminContent() {
                       onChange={(v) => setDraft((d) => ({ ...(d ?? effective!), fallback: v }))}
                     />
                   )}
+                  {/* Cost estimate */}
+                  {effective.vision && effective.translation && (() => {
+                    const cost = estimateCostPer1000(effective.vision, effective.translation);
+                    return (
+                      <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">Cost estimat / 1 000 etichete: </span>
+                        {cost === 0
+                          ? <span className="text-green-600 font-medium">Gratuit (Ollama on-premise)</span>
+                          : <span className="font-semibold text-foreground">${cost.toFixed(2)} USD</span>
+                        }
+                        <span className="ml-1">(Vision + Translation, ~{AVG_TOKENS.vision.in + AVG_TOKENS.vision.out + AVG_TOKENS.translation.in + AVG_TOKENS.translation.out} tokens/etichetă)</span>
+                      </div>
+                    );
+                  })()}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">Nicio configurare găsită.</p>

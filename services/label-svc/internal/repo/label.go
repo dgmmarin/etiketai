@@ -216,7 +216,7 @@ func (r *LabelRepo) List(ctx context.Context, f ListFilter) ([]Label, int, error
 	rows, err := r.db.Query(ctx, `
 		SELECT id, workspace_id, created_by_user_id, COALESCE(product_id::text,''),
 		       status, image_s3_key, COALESCE(category,''), COALESCE(detected_language,''),
-		       NULL::jsonb, NULL::jsonb, COALESCE(compliance_score,0),
+		       NULL::jsonb, COALESCE(fields_translated,'{}'), COALESCE(compliance_score,0),
 		       NULL::jsonb, confirmed_at, created_at, updated_at
 		FROM labels
 		WHERE `+where+`

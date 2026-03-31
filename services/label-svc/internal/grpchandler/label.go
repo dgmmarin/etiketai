@@ -145,6 +145,44 @@ func (h *LabelHandler) ConfirmLabel(ctx context.Context, req *labelv1.ConfirmLab
 	return &labelv1.ConfirmLabelResponse{LabelId: req.LabelId, Status: "confirmed"}, nil
 }
 
+func (h *LabelHandler) GetLabel(ctx context.Context, req *labelv1.GetLabelRequest) (*labelv1.LabelDetail, error) {
+	label, err := h.svc.GetStatus(ctx, req.LabelId, req.WorkspaceId)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "%s", err.Error())
+	}
+
+	fields := make(map[string]*labelv1.FieldValue, len(label.FieldsTranslated))
+	for k, v := range label.FieldsTranslated {
+		fv := &labelv1.FieldValue{}
+		if v != nil {
+			fv.Value = *v
+		}
+		fields[k] = fv
+	}
+
+	detail := &labelv1.LabelDetail{
+		Id:               label.ID,
+		WorkspaceId:      label.WorkspaceID,
+		Status:           label.Status,
+		Category:         label.Category,
+		DetectedLanguage: label.DetectedLanguage,
+		ImageUrl:         label.ImageS3Key,
+		Fields:           fields,
+		CreatedAt:        label.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+	if label.ConfirmedAt != nil {
+		detail.ConfirmedAt = label.ConfirmedAt.Format("2006-01-02T15:04:05Z")
+	}
+	if label.ComplianceScore > 0 || len(label.MissingFields) > 0 {
+		var missing []*labelv1.MissingField
+		for _, m := range label.MissingFields {
+			missing = append(missing, &labelv1.MissingField{Field: m["field"], Severity: m["severity"]})
+		}
+		detail.Compliance = &labelv1.ComplianceInfo{Score: int32(label.ComplianceScore), Missing: missing}
+	}
+	return detail, nil
+}
+
 func (h *LabelHandler) DeleteLabel(ctx context.Context, req *labelv1.DeleteLabelRequest) (*labelv1.DeleteLabelResponse, error) {
 	if err := h.svc.Delete(ctx, req.LabelId, req.WorkspaceId); err != nil {
 		return nil, status.Errorf(codes.Internal, "%s", err.Error())
@@ -158,6 +196,8 @@ func (h *LabelHandler) ListLabels(ctx context.Context, req *labelv1.ListLabelsRe
 		Status:      req.Status,
 		Category:    req.Category,
 		Query:       req.Q,
+		From:        req.From,
+		To:          req.To,
 		Page:        int(req.Page),
 		PerPage:     int(req.PerPage),
 	}
@@ -167,11 +207,17 @@ func (h *LabelHandler) ListLabels(ctx context.Context, req *labelv1.ListLabelsRe
 	}
 	var items []*labelv1.LabelSummary
 	for _, l := range labels {
+		var productName string
+		if pn, ok := l.FieldsTranslated["product_name"]; ok && pn != nil {
+			productName = *pn
+		}
 		items = append(items, &labelv1.LabelSummary{
-			Id:        l.ID,
-			Status:    l.Status,
-			Category:  l.Category,
-			CreatedAt: l.CreatedAt.String(),
+			Id:              l.ID,
+			Status:          l.Status,
+			ProductName:     productName,
+			Category:        l.Category,
+			ComplianceScore: int32(l.ComplianceScore),
+			CreatedAt:       l.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		})
 	}
 	return &labelv1.ListLabelsResponse{

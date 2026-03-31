@@ -9,10 +9,18 @@ export const labelKeys = {
   compliance: (id: string) => [...labelKeys.all, "compliance", id] as const,
 };
 
-export function useLabels(params?: { status?: string; page?: number; per_page?: number }) {
+export function useLabels(params?: { status?: string; category?: string; q?: string; from?: string; to?: string; page?: number; per_page?: number }) {
   return useQuery({
     queryKey: labelKeys.list(params),
     queryFn: () => labelsApi.list(params),
+    staleTime: 30_000,
+  });
+}
+
+export function useLabel(id: string) {
+  return useQuery({
+    queryKey: labelKeys.detail(id),
+    queryFn: () => labelsApi.get(id),
     staleTime: 30_000,
   });
 }

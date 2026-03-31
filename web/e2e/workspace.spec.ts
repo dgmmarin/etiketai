@@ -87,7 +87,7 @@ test.describe("Workspace / Members", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.locator("#inv-email").fill("notanemail");
     await page.getByRole("button", { name: "Trimite invitație" }).click();
-    await expect(page.locator(".text-destructive")).toBeVisible();
+    await expect(page.getByText("Email invalid")).toBeVisible();
     await page.getByRole("button", { name: "Anulează" }).click();
   });
 });

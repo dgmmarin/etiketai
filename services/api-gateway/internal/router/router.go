@@ -72,6 +72,7 @@ func New(clients *proxy.Clients, s3cfg handlers.S3Config, mwCfg middleware.Confi
 				r.Get("/", labelH.List)
 				r.With(middleware.RequireRole("admin")).Get("/export", labelH.Export)
 				r.Post("/upload", labelH.Upload)
+				r.Get("/{id}", labelH.GetLabel)
 				r.Get("/{id}/status", labelH.GetStatus)
 				r.Get("/{id}/compliance", labelH.GetCompliance)
 				r.Patch("/{id}/fields", labelH.UpdateFields)

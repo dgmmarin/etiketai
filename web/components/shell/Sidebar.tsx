@@ -9,6 +9,7 @@ import {
   Building2,
   CreditCard,
   Settings,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { hasRole } from "@/lib/utils/roleGuard";
@@ -25,6 +26,7 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   const role = useAuthStore((s) => s.user?.role);
+  const isSuperAdmin = useAuthStore((s) => s.user?.isSuperAdmin);
 
   return (
     <aside className="flex h-full w-56 flex-col border-r bg-sidebar">
@@ -57,13 +59,28 @@ export function Sidebar() {
             href="/admin"
             className={cn(
               "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              pathname.startsWith("/admin")
+              pathname === "/admin" || (pathname.startsWith("/admin") && !pathname.startsWith("/admin/tenants"))
                 ? "bg-sidebar-primary text-sidebar-primary-foreground"
                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             )}
           >
             <Settings className="h-4 w-4 shrink-0" />
             Admin
+          </Link>
+        )}
+
+        {isSuperAdmin && (
+          <Link
+            href="/admin/tenants"
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              pathname.startsWith("/admin/tenants")
+                ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )}
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            Platform Admin
           </Link>
         )}
       </nav>

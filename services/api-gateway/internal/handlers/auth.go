@@ -94,11 +94,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		"access_token":  result.AccessToken,
 		"refresh_token": result.RefreshToken,
 		"expires_in":    result.ExpiresIn,
-		"user": map[string]string{
-			"id":           result.UserID,
-			"email":        result.Email,
-			"workspace_id": result.WorkspaceID,
-			"role":         result.Role,
+		"user": map[string]any{
+			"id":            result.UserID,
+			"email":         result.Email,
+			"workspace_id":  result.WorkspaceID,
+			"role":          result.Role,
+			"is_superadmin": result.IsSuperAdmin,
 		},
 	})
 }
@@ -113,15 +114,40 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.auth.Refresh(r.Context(), req.RefreshToken)
+	// Step 1: validate token and get user email (JWT has empty wid at this point).
+	initial, err := h.auth.Refresh(r.Context(), req.RefreshToken)
 	if err != nil {
 		middleware.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid refresh token", "code": "INVALID_TOKEN"})
 		return
 	}
 
+	// Step 2: resolve workspace from workspace-svc using the email.
+	wsInfo, wsErr := h.workspace.GetUserWorkspace(r.Context(), initial.Email)
+
+	var result *proxy.RefreshResult
+	if wsErr == nil && wsInfo.WorkspaceID != "" {
+		// Step 3: re-issue the token with wid+role embedded so API calls work correctly.
+		result, err = h.auth.RefreshWithWorkspace(r.Context(), req.RefreshToken, wsInfo.WorkspaceID, wsInfo.Role)
+		if err != nil {
+			middleware.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid refresh token", "code": "INVALID_TOKEN"})
+			return
+		}
+		result.WorkspaceID = wsInfo.WorkspaceID
+		result.Role = wsInfo.Role
+	} else {
+		result = initial
+	}
+
 	middleware.WriteJSON(w, http.StatusOK, map[string]any{
 		"access_token": result.AccessToken,
 		"expires_in":   result.ExpiresIn,
+		"user": map[string]any{
+			"id":            result.UserID,
+			"email":         result.Email,
+			"workspace_id":  result.WorkspaceID,
+			"role":          result.Role,
+			"is_superadmin": result.IsSuperAdmin,
+		},
 	})
 }
 
@@ -187,11 +213,12 @@ func (h *AuthHandler) OAuthGoogle(w http.ResponseWriter, r *http.Request) {
 		"access_token":  result.AccessToken,
 		"refresh_token": result.RefreshToken,
 		"expires_in":    result.ExpiresIn,
-		"user": map[string]string{
-			"id":           result.UserID,
-			"email":        result.Email,
-			"workspace_id": result.WorkspaceID,
-			"role":         result.Role,
+		"user": map[string]any{
+			"id":            result.UserID,
+			"email":         result.Email,
+			"workspace_id":  result.WorkspaceID,
+			"role":          result.Role,
+			"is_superadmin": result.IsSuperAdmin,
 		},
 	})
 }

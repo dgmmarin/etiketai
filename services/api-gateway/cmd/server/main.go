@@ -51,6 +51,7 @@ func main() {
 	// ─── S3 client (for upload pre-processing) ────────────────────────────────
 	s3Cfg := handlers.S3Config{
 		Endpoint:  getEnvOr("S3_ENDPOINT", "http://localhost:9000"),
+		PublicURL: getEnvOr("S3_PUBLIC_URL", getEnvOr("S3_ENDPOINT", "http://localhost:9000")),
 		AccessKey: mustEnv("S3_ACCESS_KEY"),
 		SecretKey: mustEnv("S3_SECRET_KEY"),
 		Bucket:    getEnvOr("S3_BUCKET", "etiketai"),

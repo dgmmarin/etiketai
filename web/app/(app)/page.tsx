@@ -28,7 +28,7 @@ export default function DashboardPage() {
             <Tag className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{labels?.total ?? "—"}</div>
+            <div className="text-2xl font-bold">{labels?.pagination.total ?? "—"}</div>
           </CardContent>
         </Card>
 
@@ -75,16 +75,16 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {labels?.labels && labels.labels.length > 0 && (
+      {labels?.data && labels.data.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Etichete recente</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">
-              {labels.labels.slice(0, 5).map((l) => (
+              {labels.data.slice(0, 5).map((l) => (
                 <li key={l.id} className="flex items-center justify-between text-sm">
-                  <span className="truncate text-muted-foreground max-w-[200px]">{l.original_filename}</span>
+                  <span className="truncate text-muted-foreground max-w-[200px]">{l.product_name ?? l.id}</span>
                   <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs capitalize">{l.status}</span>
                 </li>
               ))}

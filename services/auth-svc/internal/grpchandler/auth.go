@@ -67,7 +67,9 @@ func (h *AuthHandler) Login(ctx context.Context, req *authv1.LoginRequest) (*aut
 }
 
 func (h *AuthHandler) RefreshToken(ctx context.Context, req *authv1.RefreshTokenRequest) (*authv1.RefreshTokenResponse, error) {
-	result, err := h.svc.RefreshToken(ctx, req.RefreshToken)
+	workspaceID := metaValue(ctx, "x-workspace-id")
+	role := metaValue(ctx, "x-role")
+	result, err := h.svc.RefreshToken(ctx, req.RefreshToken, workspaceID, role)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%s", err.Error())
 	}

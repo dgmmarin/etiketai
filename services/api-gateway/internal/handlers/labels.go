@@ -24,6 +24,7 @@ import (
 // S3Config holds object-storage credentials for the gateway.
 type S3Config struct {
 	Endpoint  string
+	PublicURL string
 	AccessKey string
 	SecretKey string
 	Bucket    string
@@ -40,6 +41,7 @@ type LabelHandler struct {
 func NewLabelHandler(label *proxy.LabelClient, s3cfg S3Config, logger *zap.Logger) *LabelHandler {
 	s3, err := storage.NewS3Client(context.Background(), storage.Config{
 		Endpoint:  s3cfg.Endpoint,
+		PublicURL: s3cfg.PublicURL,
 		AccessKey: s3cfg.AccessKey,
 		SecretKey: s3cfg.SecretKey,
 		Bucket:    s3cfg.Bucket,
@@ -105,6 +107,36 @@ func (h *LabelHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	middleware.WriteJSON(w, http.StatusCreated, result)
+}
+
+// GET /v1/labels/{id}
+func (h *LabelHandler) GetLabel(w http.ResponseWriter, r *http.Request) {
+	labelID := chi.URLParam(r, "id")
+	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+
+	detail, err := h.label.GetLabel(r.Context(), labelID, workspaceID)
+	if err != nil {
+		middleware.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "label not found", "code": "NOT_FOUND"})
+		return
+	}
+
+	imageURL := ""
+	if detail.ImageUrl != "" && h.s3 != nil {
+		imageURL = h.s3.ObjectURL(detail.ImageUrl)
+	}
+
+	middleware.WriteJSON(w, http.StatusOK, map[string]any{
+		"id":                detail.Id,
+		"workspace_id":      detail.WorkspaceId,
+		"status":            detail.Status,
+		"category":          detail.Category,
+		"detected_language": detail.DetectedLanguage,
+		"image_url":         imageURL,
+		"fields":            detail.Fields,
+		"compliance":        detail.Compliance,
+		"created_at":        detail.CreatedAt,
+		"confirmed_at":      detail.ConfirmedAt,
+	})
 }
 
 // GET /v1/labels/{id}/status
@@ -188,6 +220,8 @@ func (h *LabelHandler) List(w http.ResponseWriter, r *http.Request) {
 		Status:      q.Get("status"),
 		Category:    q.Get("category"),
 		Q:           q.Get("q"),
+		From:        q.Get("from"),
+		To:          q.Get("to"),
 		Page:        int32(page),
 		PerPage:     int32(perPage),
 	})

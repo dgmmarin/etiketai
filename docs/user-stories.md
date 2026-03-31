@@ -24,9 +24,9 @@
 | 🔄 Partial | Schelet / stub / implementare parțială |
 | ⬜ | Neînceput |
 
-### Progres curent (2026-03-21)
+### Progres curent (2026-03-27)
 
-**BE implementat:** auth-svc (register/login/refresh/logout/verify-email/verify-token + rate limiter), workspace-svc (create/invite/accept/revoke/quota), label-svc (upload/status/fields/confirm/delete/list + Asynq worker), agent-svc (VisionAgent Claude+Ollama, TranslationAgent Claude, ValidationAgent rules engine, AgentFactory, gRPC handler), api-gateway (proxy-uri gRPC + HTTP handlers + S3 upload real + RBAC + rate limiter), print-svc (PDF + ZPL generator, Asynq worker, reprint URL), billing (Stripe checkout + webhook). **FE Web (Next.js) implementat:** login (email+password + Google OAuth), register, verify-email, dashboard, labels list (filtru status + paginare + export CSV), label detail (editor câmpuri + compliance panel + print SSE streaming), products (CRUD + search), workspace (profil + membri + invite + revocare), billing (plan curent + checkout), admin (agent config + test connection + logs + metrics + rate limits), invite acceptance page. **FE Flutter:** 0% (neînceput).
+**BE implementat:** auth-svc (register/login/refresh/logout/verify-email/verify-token + rate limiter + email claim în JWT), workspace-svc (create/invite/accept/revoke/quota), label-svc (upload/status/fields/confirm/delete/list cu filtre from/to/status/category/q + product_name + compliance_score în list response + Asynq worker), agent-svc (VisionAgent Claude+Ollama, TranslationAgent Claude, ValidationAgent rules engine, AgentFactory, gRPC handler), api-gateway (proxy-uri gRPC + HTTP handlers + S3 upload real fix seekable stream + RBAC + rate limiter + is_superadmin în login response), print-svc (PDF + ZPL generator, Asynq worker, reprint URL), billing (Stripe checkout + webhook). **FE Web (Next.js) implementat:** login (email+password + Google OAuth), register, verify-email, dashboard, labels list (filtru status + filtru categorie + search + filtru dată from/to + paginare + export CSV + coloane Categorie + Conformitate), label detail (editor câmpuri + compliance panel + print SSE streaming), products (CRUD + search), workspace (profil + membri + invite + revocare), billing (plan curent + checkout), admin (agent config + test connection + logs + metrics + rate limits + cost estimat), admin/tenants (superadmin — lista workspace-uri cu plan + quota), invite acceptance page. **Auth/Sesiune:** AuthGuard rehydratare silențioasă la refresh — JWT decodat client-side pentru a restaura user complet (inclusiv email, role, isSuperAdmin). **Superadmin:** is_superadmin în DB + JWT (email inclus acum) + API + FE pagină admin/tenants + sidebar link Platform Admin (condiționat isSuperAdmin). **FE Flutter:** 0% (neînceput). **Teste E2E Playwright (49 teste):** auth, dashboard, labels (search + filtre + export CSV + detaliu), products (CRUD), workspace (profil + invite + RBAC), admin (tabs + agenți + cost estimat + logs + rate limits). **Bug fixes sesiune:** Content-Type clobbera FormData la upload (fix: skip header când body instanceof FormData); S3 PutObject unseekable stream pe HTTP (fix: buffer cu io.ReadAll → bytes.NewReader); AuthGuard restaura token dar nu user → role/isSuperAdmin pierdute la refresh (fix: decodare JWT payload client-side + setSession).
 
 ---
 
@@ -67,7 +67,7 @@
 | T-0105 | [FE] Google OAuth2 flow în Flutter (google_sign_in package) | M | FE | ⬜ |
 | T-0105-W ✅ | [FE Web] Google OAuth pe pagina /login — buton GSI oficial, callback → POST /auth/oauth/google, sesiune identică cu login clasic; activat prin NEXT_PUBLIC_GOOGLE_CLIENT_ID | S | FE | ✅ Done |
 | T-0106 | [BE] POST /auth/oauth/google — exchange token, creare user dacă nou | S | BE | ✅ |
-| T-0107 | [QA] Teste: email invalid, parolă slabă, email duplicat, OAuth flow | S | QA | ⬜ |
+| T-0107 🔄 | [QA] Teste: email invalid, parolă slabă, email duplicat, OAuth flow | S | QA | 🔄 Partial — E2E Playwright: validare câmpuri lipsă, email duplicat, register succes; OAuth flow lipsă |
 
 ---
 
@@ -93,7 +93,7 @@
 | T-0205 | [FE] Secure token storage cu flutter_secure_storage | S | FE | ⬜ |
 | T-0205-W ✅ | [FE Web] Sesiune securizată web — access token în memorie (Zustand), refresh token în httpOnly cookie via Next.js API route; AuthGuard rehydratare silențioasă la mount (funcționează în tab nou) | M | FE | ✅ Done |
 | T-0206 | [BE] Rate limiter middleware Go pe /auth/login (Redis sliding window) | S | BE | ✅ |
-| T-0207 | [QA] Teste: token expirat, refresh flow, logout, rate limit | M | QA | ⬜ |
+| T-0207 🔄 | [QA] Teste: token expirat, refresh flow, logout, rate limit | M | QA | 🔄 Partial — E2E: logout flow testat; token expirat + rate limit lipsă |
 
 ---
 
@@ -173,7 +173,7 @@
 | T-0505 | [BE] GET /products?q=&category= — search + filtrare paginated | S | BE | ✅ |
 | T-0506 | [BE] PATCH /products/:id — editare câmpuri traducere salvată | S | BE | ✅ |
 | T-0507 | [BE] Contor print per produs — increment la fiecare job de print | XS | BE | ✅ |
-| T-0508 | [QA] Teste: salvare, search, match QR, editare, contorizare | M | QA | ⬜ |
+| T-0508 🔄 | [QA] Teste: salvare, search, match QR, editare, contorizare | M | QA | 🔄 Partial — E2E: creare + apare în listă (cu search), editare dialog pre-completat, validare câmp gol; QR match + contorizare lipsă |
 
 ---
 
@@ -201,7 +201,7 @@
 | T-0605 ✅ | [BE] POST /admin/agent-config/test — apel test cu imagine demo | M | BE | ✅ Done (TestAgentConfig gRPC) |
 | T-0606 ✅ | [BE] Fallback chain — retry pe provider backup la eroare | M | BE | ✅ Done (AgentService.ProcessVision cu GetFallbackVisionAgent) |
 | T-0607 | [BE] Secure key management — API keys encrypted AES-256 în DB | L | BE | ✅ |
-| T-0608 🔄 | [FE Web] Ecran configurare agenți: dropdown, test connection, cost estimat | L | FE | 🔄 Partial — dropdown provider/model/endpoint + test connection cu latență implementate; cost estimat per 1000 etichete lipsă |
+| T-0608 ✅ | [FE Web] Ecran configurare agenți: dropdown, test connection, cost estimat | L | FE | ✅ Done — dropdown provider/model/endpoint + test connection cu latență + cost estimat per 1000 etichete (pricing table frontend mirrors Go backend, calculat din vision + translation tokens) |
 | T-0609 | [QA] Teste: switch provider, fallback, key invalidă, test connection | L | QA | ⬜ |
 
 ---
@@ -394,12 +394,12 @@
 
 | Task ID | Descriere | Est. | Owner |
 |---|---|---|---|
-| T-1401 🔄 | [FE Web] Next.js pagină /labels — tabel cu filtre, search, paginare | XL | FE | 🔄 Partial — tabel + filtru status + paginare + link la detaliu implementate; lipsă: filtru dată, filtru operator, search full-text input, thumbnail imagine |
+| T-1401 🔄 | [FE Web] Next.js pagină /labels — tabel cu filtre, search, paginare | XL | FE | 🔄 Partial — tabel + filtru status + filtru categorie + search full-text + filtru dată from/to + paginare + link la detaliu + coloane Categorie și Conformitate implementate; lipsă: filtru operator, thumbnail imagine |
 | T-1402 ✅ | [BE] GET /labels — endpoint paginated cu filtre multiple, full-text search PG | M | BE | ✅ Done |
 | T-1403 | [FE Web] Modal preview etichetă — render câmpuri + imagine originală | M | FE | ⬜ (pagină dedicată /labels/[id] în loc de modal; imagine originală lipsă — necesită backend change) |
 | T-1404 | [BE] GET /labels/export?format=csv — generare CSV cu toate etichetele workspace | M | BE | ✅ |
 | T-1405 ✅ | [FE Web] Buton Export CSV (admin only) | S | FE | ✅ Done — fetch cu Bearer + download automat; date-range picker lipsă |
-| T-1406 | [QA] Teste: filtre combinate, search, export CSV, preview, reprint din web | M | QA | ⬜ |
+| T-1406 🔄 | [QA] Teste: filtre combinate, search, export CSV, preview, reprint din web | M | QA | 🔄 Partial — E2E: filtru status (confirmed/pending/reset cu buton Resetează), search text input, filtru categorie, export CSV, detaliu etichetă; filtre combinate simultan + reprint lipsă |
 
 ---
 
@@ -423,7 +423,7 @@
 | T-1505 ✅ | [FE Web] Pagină /workspace — secțiune membri: lista cu rol+dată, invite form (email + rol dropdown), buton revocare cu AlertDialog confirmare | L | FE | ✅ Done |
 | T-1505-I ✅ | [FE Web] Pagină /invite/[token] — acceptare invitație: loading / success (rol afișat) / error (expirat/invalid), redirecționare la dashboard | S | FE | ✅ Done |
 | T-1506 ✅ | [BE] DELETE /workspace/members/:id — revocare acces, invalidare sesiuni | S | BE | ✅ Done |
-| T-1507 | [QA] Teste: invite flow, expirare link, RBAC per rol, revocare, limită plan | L | QA | ⬜ |
+| T-1507 🔄 | [QA] Teste: invite flow, expirare link, RBAC per rol, revocare, limită plan | L | QA | 🔄 Partial — E2E: invite dialog (submit valid, validare email invalid, cancel), RBAC viewer vs admin (link sidebar + URL direct blocat); expirare link + revocare + limită plan lipsă |
 
 ---
 
@@ -441,7 +441,7 @@
 
 | Task ID | Descriere | Est. | Owner |
 |---|---|---|---|
-| T-1601 | [FE Web] Pagină /admin/tenants — tabel tenants, search, link la config | L | FE | ⬜ (arhitectura BE nu are concept de platform superadmin; toate rutele /admin sunt workspace-scoped — funcționalitate imposibil de implementat fără schimbare BE) |
+| T-1601 ✅ | [FE Web] Pagină /admin/tenants — tabel tenants, search, link la config | L | FE | ✅ Done — BE superadmin implementat (is_superadmin DB + JWT sadm claim + /v1/superadmin/workspaces API + RequireSuperAdmin middleware); FE pagină /admin/tenants completă (lista workspace-uri cu plan + quota + dată creare, paginare 50/page, guard isSuperAdmin); Sidebar link "Platform Admin" cu ShieldCheck icon vizibil doar pentru superadmini; admin@demo.com promovat superadmin în DB |
 | T-1602 ✅ | [FE Web] Pagină /admin — config agenți workspace curent (provider/model/endpoint per tip), test connection cu latență, fallback config | L | FE | ✅ Done (workspace-scoped, nu multi-tenant) |
 | T-1603 ✅ | [BE] GET /admin/metrics — utilizare agregată per tenant | M | BE | ✅ Done (agent-svc adminhttp + api-gateway /admin/workspaces/{id}/metrics) |
 | T-1603-W ✅ | [FE Web] Strip metrici în /admin — 4 card-uri: total etichete, confirmate, eșuate, încredere medie | S | FE | ✅ Done |
@@ -450,7 +450,7 @@
 | T-1605 | [BE] PUT /admin/tenants/:id/rate-limits — configurare limite custom per tenant | M | BE | ✅ |
 | T-1605-W ✅ | [FE Web] Tab "Rate Limits" în /admin — form: încărcări/minut + tipăriri/zi, buton actualizare | S | FE | ✅ Done |
 | T-1606 ✅ | [BE] Cost tracker — tabel prețuri Claude/OpenAI/Ollama, calculare cost per apel | L | BE | ✅ Done (agent-svc/internal/agent/pricing.go) |
-| T-1607 | [QA] Teste: access control admin, config update live, cost tracker acuratețe | M | QA | ⬜ |
+| T-1607 🔄 | [QA] Teste: access control admin, config update live, cost tracker acuratețe | M | QA | 🔄 Partial — E2E: RBAC (viewer blocat), tab navigation, provider rows, metrici, cost estimat per 1000 etichete vizibil, logs, rate limits; config update live lipsă |
 
 ---
 

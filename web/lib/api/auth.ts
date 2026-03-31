@@ -23,6 +23,7 @@ export interface RegisterResponse {
 export interface RefreshResponse {
   access_token: string;
   expires_in: number;
+  user?: LoginResponse["user"];
 }
 
 export function toAuthUser(r: LoginResponse["user"]): AuthUser {

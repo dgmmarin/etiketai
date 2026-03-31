@@ -14,7 +14,7 @@ test.afterAll(async () => {
 });
 
 async function goToAdmin() {
-  await adminPage.getByRole("link", { name: "Admin" }).click();
+  await adminPage.getByRole("link", { name: "Admin", exact: true }).click();
   await adminPage.waitForURL("/admin");
   await expect(adminPage.getByRole("tab", { name: /Agent AI/i })).toBeVisible({ timeout: 8_000 });
 }
@@ -23,7 +23,7 @@ test.describe("Admin / Access", () => {
   test("admin link in sidebar navigates to /admin", async () => {
     await adminPage.getByRole("link", { name: "Dashboard" }).click();
     await adminPage.waitForURL("/");
-    await adminPage.getByRole("link", { name: "Admin" }).click();
+    await adminPage.getByRole("link", { name: "Admin", exact: true }).click();
     await adminPage.waitForURL("/admin");
     await expect(adminPage.url()).toContain("/admin");
   });
@@ -39,13 +39,17 @@ test.describe("Admin / Agent Config", () => {
   test.beforeEach(goToAdmin);
 
   test("shows vision, translation and validation provider rows", async () => {
-    await expect(adminPage.getByText(/VISION/i)).toBeVisible({ timeout: 8_000 });
-    await expect(adminPage.getByText(/TRANSLATION/i)).toBeVisible();
-    await expect(adminPage.getByText(/VALIDATION/i)).toBeVisible();
+    await expect(adminPage.getByText("Vision", { exact: true })).toBeVisible({ timeout: 8_000 });
+    await expect(adminPage.getByText("Translation", { exact: true })).toBeVisible();
+    await expect(adminPage.getByText("Validation", { exact: true })).toBeVisible();
   });
 
   test("metrics card shows label statistics", async () => {
     await expect(adminPage.getByText("Etichete totale")).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("shows cost estimate per 1000 labels", async () => {
+    await expect(adminPage.getByText(/Cost estimat \/ 1 000 etichete/i)).toBeVisible({ timeout: 8_000 });
   });
 });
 

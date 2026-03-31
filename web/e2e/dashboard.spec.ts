@@ -40,7 +40,7 @@ test.describe("Dashboard", () => {
   });
 
   test("admin link is visible for admin user", async () => {
-    await expect(page.getByRole("link", { name: "Admin" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Admin", exact: true })).toBeVisible();
   });
 
   test("topbar shows user email", async () => {

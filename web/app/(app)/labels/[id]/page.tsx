@@ -4,6 +4,7 @@ import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle, Printer, Loader2, AlertCircle } from "lucide-react";
 import {
+  useLabel,
   useLabelStatus,
   useLabelCompliance,
   useUpdateFields,
@@ -23,6 +24,7 @@ export default function LabelDetailPage({ params }: { params: Promise<{ id: stri
   const router = useRouter();
   const role = useAuthStore((s) => s.user?.role);
 
+  const { data: detail } = useLabel(id);
   const { data: label, isPending } = useLabelStatus(id);
   const { data: compliance } = useLabelCompliance(id, label?.status === "needs_review" || label?.status === "confirmed");
 
@@ -70,12 +72,24 @@ export default function LabelDetailPage({ params }: { params: Promise<{ id: stri
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-xl font-bold">{label.id}</h1>
+          <h1 className="text-xl font-bold">{label.label_id}</h1>
           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[label.status] ?? ""}`}>
             {label.status}
           </span>
         </div>
       </div>
+
+      {detail?.image_url && (
+        <Card>
+          <CardContent className="p-4 flex justify-center">
+            <img
+              src={detail.image_url}
+              alt="Etichetă încărcată"
+              className="max-h-96 max-w-full rounded object-contain"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {isProcessing && (
         <Card>

@@ -43,6 +43,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 	WorkspaceID  string `json:"wid"`
 	Role         string `json:"role"`
+	Email        string `json:"email,omitempty"`
 	IsSuperAdmin bool   `json:"sadm,omitempty"`
 }
 
@@ -145,8 +146,8 @@ func (s *AuthService) Login(ctx context.Context, email, password, workspaceID, r
 
 // ─── Token operations ─────────────────────────────────────────────────────────
 
-func (s *AuthService) RefreshToken(ctx context.Context, rawRefreshToken string) (*LoginResult, error) {
-	userID, err := s.tokens.ValidateAndRotateRefreshToken(ctx, rawRefreshToken)
+func (s *AuthService) RefreshToken(ctx context.Context, rawRefreshToken, workspaceID, role string) (*LoginResult, error) {
+	userID, err := s.tokens.ValidateRefreshToken(ctx, rawRefreshToken)
 	if err != nil {
 		if errors.Is(err, repo.ErrNotFound) {
 			return nil, ErrInvalidToken
@@ -159,9 +160,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, rawRefreshToken string) 
 		return nil, err
 	}
 
-	// Note: workspace_id and role come from the workspace-svc query in the gateway.
-	// Here we re-issue with empty workspace/role — the gateway enriches the response.
-	return s.issueTokenPair(ctx, user.ID, user.Email, "", "", user.IsSuperAdmin)
+	return s.issueTokenPair(ctx, user.ID, user.Email, workspaceID, role, user.IsSuperAdmin)
 }
 
 func (s *AuthService) Logout(ctx context.Context, rawRefreshToken string) error {
@@ -247,6 +246,7 @@ func (s *AuthService) issueTokenPair(ctx context.Context, userID, email, workspa
 		},
 		WorkspaceID:  workspaceID,
 		Role:         role,
+		Email:        email,
 		IsSuperAdmin: isSuperAdmin,
 	}
 

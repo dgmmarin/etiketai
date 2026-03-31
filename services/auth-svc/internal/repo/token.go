@@ -37,15 +37,13 @@ func (r *TokenRepo) SaveRefreshToken(ctx context.Context, userID, rawToken strin
 	return err
 }
 
-func (r *TokenRepo) ValidateAndRotateRefreshToken(ctx context.Context, rawToken string) (userID string, err error) {
+func (r *TokenRepo) ValidateRefreshToken(ctx context.Context, rawToken string) (userID string, err error) {
 	hash := hashToken(rawToken)
 	err = r.db.QueryRow(ctx, `
-		UPDATE refresh_tokens
-		SET revoked_at = NOW()
+		SELECT user_id FROM refresh_tokens
 		WHERE token_hash = $1
 		  AND expires_at > NOW()
 		  AND revoked_at IS NULL
-		RETURNING user_id
 	`, hash).Scan(&userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound

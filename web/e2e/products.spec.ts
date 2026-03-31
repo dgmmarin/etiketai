@@ -73,8 +73,12 @@ test.describe("Products / Create", () => {
     await page.locator("#sku").fill(`SKU-${ts}`);
     await page.getByRole("button", { name: "Creează" }).click();
 
-    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText(name)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 8_000 });
+    // Search to locate the new product (list may paginate)
+    await page.getByPlaceholder("Caută după nume sau SKU...").fill(name);
+    await page.waitForTimeout(600);
+    await expect(page.getByText(name)).toBeVisible({ timeout: 8_000 });
+    await page.getByPlaceholder("Caută după nume sau SKU...").clear();
   });
 
   test("shows validation error when name is empty", async () => {

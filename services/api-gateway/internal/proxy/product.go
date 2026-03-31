@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -68,9 +70,13 @@ func (c *ProductClient) CreateProduct(ctx context.Context, workspaceID string, b
 }
 
 func (c *ProductClient) ListProducts(ctx context.Context, workspaceID, q, category string, page, perPage int) (map[string]any, error) {
-	path := fmt.Sprintf("/products?workspace_id=%s&q=%s&category=%s&page=%d&per_page=%d",
-		workspaceID, q, category, page, perPage)
-	result, status, err := c.do(ctx, http.MethodGet, path, workspaceID, nil)
+	params := url.Values{}
+	params.Set("workspace_id", workspaceID)
+	params.Set("q", q)
+	params.Set("category", category)
+	params.Set("page", strconv.Itoa(page))
+	params.Set("per_page", strconv.Itoa(perPage))
+	result, status, err := c.do(ctx, http.MethodGet, "/products?"+params.Encode(), workspaceID, nil)
 	if err != nil {
 		return nil, err
 	}

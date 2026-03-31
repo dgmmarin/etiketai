@@ -45,8 +45,9 @@ async function request<T>(
   retry = true
 ): Promise<T> {
   const token = _getToken();
+  const isFormData = init.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(init.headers as Record<string, string>),
   };
 

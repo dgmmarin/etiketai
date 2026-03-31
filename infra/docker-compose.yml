@@ -37,6 +37,7 @@ services:
       BILLING_SVC_URL: http://workspace-svc:8092
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-http://localhost:9000}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
       S3_BUCKET: ${S3_BUCKET:-etiketai}
@@ -289,7 +290,7 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
-    command: server /data --console-address ":9001"
+    command: server /data --address ":9000" --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin123
@@ -306,6 +307,7 @@ services:
       sleep 3;
       mc alias set local http://minio:9000 minioadmin minioadmin123;
       mc mb --ignore-existing local/etiketai;
+      mc anonymous set download local/etiketai/labels;
       mc anonymous set download local/etiketai/thumbnails;
       echo 'MinIO bucket setup complete';
       "

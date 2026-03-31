@@ -29,6 +29,8 @@ type ListRequest struct {
 	Status      string
 	Category    string
 	Q           string
+	From        string
+	To          string
 	Page        int32
 	PerPage     int32
 }
@@ -73,8 +75,17 @@ func (c *LabelClient) List(ctx context.Context, req ListRequest) (any, error) {
 		Status:      req.Status,
 		Category:    req.Category,
 		Q:           req.Q,
+		From:        req.From,
+		To:          req.To,
 		Page:        req.Page,
 		PerPage:     req.PerPage,
+	})
+}
+
+func (c *LabelClient) GetLabel(ctx context.Context, labelID, workspaceID string) (*labelv1.LabelDetail, error) {
+	return c.client.GetLabel(ctx, &labelv1.GetLabelRequest{
+		LabelId:     labelID,
+		WorkspaceId: workspaceID,
 	})
 }
 
